@@ -20,7 +20,6 @@ HSEfriends это бот, созданный чтобы помочь студе�
 
 Лицензия: GNU GENERAL PUBLIC LICENSE
 
-Copyright 2024 HSEfriends
 
 HSEfriends is a bot created to help students of the moscow campus of HSE to find like-minded people.
 
