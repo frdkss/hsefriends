@@ -14,6 +14,4 @@ class FirstRegistration(StatesGroup):
     course = State()
     photo = State()
     about = State()
-
-    # friend
     friend_sex = State()

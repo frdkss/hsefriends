@@ -7,6 +7,9 @@ from log.logger_cfg import inline_kb_logger
 
 from keyboards.default_keyboards import user_sex, user_isBaccalaureate, user_course_bac, user_course_mag, no_photo, \
     no_about, user_friend_sex
+
+from database.db_cfg import accounts_db_session
+from database.models import AccountsTable
 from .forms.state_forms import FirstRegistration
 
 router = Router()
@@ -88,7 +91,7 @@ async def user_photo_inf(message: Message, state: FSMContext):
         bot = message.bot
 
         # Создаем директорию, если она не существует
-        downloads_dir = 'downloads'
+        downloads_dir = f'account_photos/{message.chat.id}'
         if not os.path.exists(downloads_dir):
             os.makedirs(downloads_dir)
 
@@ -135,5 +138,21 @@ async def user_friend_sex_inf(message: Message, state: FSMContext):
         await state.update_data(friends_sex="dont_care")
 
     data = await state.get_data()
+    accounts_table = AccountsTable(
+        chat_id = data['chat_id'],
+        tg_id = data['username'],
+        name = data['name'],
+        age = data['age'],
+        isMale = data['isMale'],
+        faculty = data['faculty'],
+        isBaccalaureate = data['isBaccalaureate'],
+        course = data['course'],
+        photo = data['photo'],
+        about = data['about'],
+        friend_sex = data['friends_sex']
+    )
+    accounts_db_session.add(accounts_table)
+    accounts_db_session.commit()
+
     await message.answer(f"Регистраниця завершена вот твои данные\n{data}", reply_markup=ReplyKeyboardRemove())
     print(data)

@@ -7,6 +7,8 @@ from aiogram.enums import ParseMode
 from dotenv import load_dotenv, find_dotenv
 
 from log.logger_cfg import inits_logger
+from database.db_cfg import create_db
+
 from handlers import usr_commands
 # from callbacks import usr_callbacks
 # from callbacks import
@@ -32,4 +34,5 @@ async def main():
 if __name__ == "__main__":
     print("Bot started!" + colorama.Fore.RED)
     inits_logger.info('bot successfully started')
+    create_db()
     asyncio.run(main())
