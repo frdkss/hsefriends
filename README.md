@@ -4,7 +4,7 @@ HSEfriends это бот, созданный чтобы помочь студе�
  
 
 
-**Авторы проекта не несут ответственности за контент, создаваемый пользователями сервиса.**
+**Авторы проекта не несут ответственности за какой-либо контент, создаваемый пользователями сервиса.**
 
 Об ошибках в работе писать в телеграм: @uselessantiscript
 
@@ -23,7 +23,7 @@ HSEfriends это бот, созданный чтобы помочь студе�
 
 HSEfriends is a bot created to help students of the moscow campus of HSE to find like-minded people.
 
-**The authors of the project are not responsible for the content created by users of the service.**
+**The authors of the project are not responsible for any content created by users of the service.**
 
 Bug report here: @uselessantiscript
 
