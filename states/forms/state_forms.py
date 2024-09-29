@@ -4,6 +4,7 @@ class FirstRegistration(StatesGroup):
     # auto
     username = State()
     chat_id = State()
+    isActive = State()
 
     # user info
     name = State()
@@ -15,3 +16,9 @@ class FirstRegistration(StatesGroup):
     photo = State()
     about = State()
     friend_sex = State()
+
+class MenuState:
+    MAIN = "main_menu"
+    SETTINGS = "main_settings"
+    HELP = "help_menu"
+

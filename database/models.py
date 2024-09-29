@@ -9,6 +9,8 @@ class AccountsTable(Base):
     uid = Column(Integer, primary_key=True)
     chat_id = Column(Integer, nullable=False, unique=True)
     tg_id = Column(String, nullable=False, unique=True)
+    isActive = Column(Boolean, nullable=False)
+    deleted_in = Column(String, nullable=True)
     # user info
     name = Column(String(30), nullable=False)
     age = Column(Integer, nullable=False)

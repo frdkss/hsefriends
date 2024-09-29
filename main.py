@@ -10,8 +10,7 @@ from log.logger_cfg import inits_logger
 from database.db_cfg import create_db
 
 from handlers import usr_commands
-# from callbacks import usr_callbacks
-# from callbacks import
+from callbacks import usr_callbacks
 from states import first_registration_state
 
 colorama.init()
@@ -23,7 +22,7 @@ async def main():
 
     dp.include_routers(
         usr_commands.router,
-        # usr_callbacks.router,
+        usr_callbacks.router,
         first_registration_state.router
     )
 

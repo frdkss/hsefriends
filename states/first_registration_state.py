@@ -1,12 +1,16 @@
 import os
 
 from aiogram import Router, F
+from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from log.logger_cfg import inline_kb_logger
 
 from keyboards.default_keyboards import user_sex, user_isBaccalaureate, user_course_bac, user_course_mag, no_photo, \
     no_about, user_friend_sex
+
+from callbacks import usr_callbacks
+from handlers import usr_commands
 
 from database.db_cfg import accounts_db_session
 from database.models import AccountsTable
@@ -16,19 +20,42 @@ router = Router()
 
 
 @router.callback_query(F.data == 'first_reg')
-async def callback_first_reg(call: CallbackQuery, state: FSMContext):
-    inline_kb_logger.info('start reg')
-    await state.set_state(FirstRegistration.username)
-    user_username = call.from_user.username
-    await state.set_state(FirstRegistration.chat_id)
+async def user_first_reg(event: Message | CallbackQuery, state: FSMContext):
+    if isinstance(event, Message):
+        inline_kb_logger.info('start reg')
+        await state.set_state(FirstRegistration.username)
+        user_username = event.from_user.username
+        await state.set_state(FirstRegistration.chat_id)
 
-    await state.update_data(username=user_username)
-    user_chat_id = call.message.chat.id
-    await state.set_state(FirstRegistration.name)
+        await state.update_data(username=user_username)
+        user_chat_id = event.chat.id
+        await state.set_state(FirstRegistration.isActive)
 
-    await state.update_data(chat_id=user_chat_id)
-    await call.message.answer("Давай начнем! Напиши свое имя которое будет отображаться в профиле.")
+        await state.update_data(chat_id=user_chat_id)
+        await state.set_state(FirstRegistration.name)
 
+        await state.update_data(isActive = True)
+        await event.answer("Давай начнем, если ты хочешь отменить, напиши \"/cancel\"! Напиши свое имя которое будет отображаться в профиле.")
+    elif isinstance(event, CallbackQuery):
+        await event.message.delete()
+        inline_kb_logger.info('start reg')
+        await state.set_state(FirstRegistration.username)
+        user_username = event.from_user.username
+        await state.set_state(FirstRegistration.chat_id)
+
+        await state.update_data(username=user_username)
+        user_chat_id = event.message.chat.id
+        await state.set_state(FirstRegistration.name)
+
+        await state.update_data(chat_id=user_chat_id)
+        await event.message.answer("Давай начнем! Напиши свое имя которое будет отображаться в профиле.")
+
+@router.message(Command('cancel'))
+async def cancel_reg(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer('Регистрация отменена')
+
+    await usr_commands.command_start(message)
 
 @router.message(FirstRegistration.name)
 async def user_name_inf(message: Message, state: FSMContext):
@@ -138,21 +165,23 @@ async def user_friend_sex_inf(message: Message, state: FSMContext):
         await state.update_data(friends_sex="dont_care")
 
     data = await state.get_data()
+    print(data)
     accounts_table = AccountsTable(
-        chat_id = data['chat_id'],
-        tg_id = data['username'],
-        name = data['name'],
-        age = data['age'],
-        isMale = data['isMale'],
-        faculty = data['faculty'],
-        isBaccalaureate = data['isBaccalaureate'],
-        course = data['course'],
-        photo = data['photo'],
-        about = data['about'],
-        friend_sex = data['friends_sex']
+        chat_id=data['chat_id'],
+        tg_id=data['username'],
+        isActive=data['isActive'],
+        name=data['name'],
+        age=data['age'],
+        isMale=data['isMale'],
+        faculty=data['faculty'],
+        isBaccalaureate=data['isBaccalaureate'],
+        course=data['course'],
+        photo=data['photo'],
+        about=data['about'],
+        friend_sex=data['friends_sex']
     )
     accounts_db_session.add(accounts_table)
     accounts_db_session.commit()
 
-    await message.answer(f"Регистраниця завершена вот твои данные\n{data}", reply_markup=ReplyKeyboardRemove())
-    print(data)
+    await message.answer(f"Регистраниця завершена!", reply_markup=ReplyKeyboardRemove())
+    await usr_callbacks.callback_menu(message)

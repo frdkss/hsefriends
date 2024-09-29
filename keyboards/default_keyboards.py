@@ -69,3 +69,15 @@ user_friend_sex = ReplyKeyboardMarkup(row_width=3,
                                               KeyboardButton(text="Без разницы")
                                           ]
                                       ])
+
+# qwe
+confirmation = ReplyKeyboardMarkup(row_width=2,
+                                   resize_keyboard=True,
+                                   one_time_keyboard=True,
+                                   input_field_placeholder="Выберете пункт из меню",
+                                   keyboard=[
+                                       [
+                                           KeyboardButton(text="Да"),
+                                           KeyboardButton(text="Нет")
+                                       ]
+                                   ])
