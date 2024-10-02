@@ -21,6 +21,7 @@ router = Router()
 
 @router.callback_query(F.data == 'first_reg')
 async def user_first_reg(event: Message | CallbackQuery, state: FSMContext):
+    print(event.message.chat.id)
     if isinstance(event, Message):
         inline_kb_logger.info('start reg')
         await state.set_state(FirstRegistration.username)
@@ -29,12 +30,12 @@ async def user_first_reg(event: Message | CallbackQuery, state: FSMContext):
 
         await state.update_data(username=user_username)
         user_chat_id = event.chat.id
-        await state.set_state(FirstRegistration.isActive)
+        # await state.set_state(FirstRegistration.isActive)
 
         await state.update_data(chat_id=user_chat_id)
         await state.set_state(FirstRegistration.name)
 
-        await state.update_data(isActive = True)
+#         await state.update_data(isActive = True)
         await event.answer("Давай начнем, если ты хочешь отменить, напиши \"/cancel\"! Напиши свое имя которое будет отображаться в профиле.")
     elif isinstance(event, CallbackQuery):
         await event.message.delete()
@@ -169,7 +170,7 @@ async def user_friend_sex_inf(message: Message, state: FSMContext):
     accounts_table = AccountsTable(
         chat_id=data['chat_id'],
         tg_id=data['username'],
-        isActive=data['isActive'],
+        isActive=True,
         name=data['name'],
         age=data['age'],
         isMale=data['isMale'],

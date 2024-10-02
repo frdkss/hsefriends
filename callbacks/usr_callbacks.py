@@ -78,6 +78,25 @@ async def callback_delete_account(event: Message | CallbackQuery):
             await callback_settings(message)
 
 
+@router.callback_query(F.data == "start_search")
+async def callback_find_people(event: Message | CallbackQuery):
+    if isinstance(event, CallbackQuery):
+        user = accounts_db_session.query(AccountsTable).filter_by(chat_id=event.message.chat.id).first()
+        friend_find_sex = accounts_db_session.query(AccountsTable).filter_by(friend_sex=user.friend_sex, chat_id = not event.message.chat.id).first()
+        if friend_find_sex == "male":
+            friend_sex = accounts_db_session.query(AccountsTable).filter_by(isMale= None, chat_id = not event.message.chat.id).first()
+
+
+@router.callback_query(F.data == "like")
+async def callback_like(event: Message | CallbackQuery):
+    pass
+
+
+@router.callback_query(F.data == "dislike")
+async def callback_dislike(event: Message | CallbackQuery):
+    pass
+
+
 @router.callback_query(F.data == "feedback")
 async def callback_feedback(event: Message | CallbackQuery):
     pass

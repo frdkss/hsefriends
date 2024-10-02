@@ -18,18 +18,18 @@ main_menu = InlineKeyboardMarkup(row_width=2,
                             ])
 
 main_settings = InlineKeyboardMarkup(row_width=3,
-                                inline_keyboard=[
-                                    [
-                                        InlineKeyboardButton(text='Изменить профиль', callback_data='edit_profile'),
-                                        InlineKeyboardButton(text='Перезаписать профиль',
-                                                             callback_data='rewrite_profile'),
-                                        InlineKeyboardButton(text='Отключить профиль', callback_data='off_profile'),
-                                        InlineKeyboardButton(text='Удалить профиль', callback_data='delete_profile')
-                                    ],
-                                    [
-                                        InlineKeyboardButton(text='Обратная связь', callback_data='feedback')
-                                    ]
-                                ])
+                                     inline_keyboard=[
+                                         [
+                                             InlineKeyboardButton(text='Изменить профиль', callback_data='edit_profile'),
+                                             InlineKeyboardButton(text='Перезаписать профиль',
+                                                                  callback_data='rewrite_profile'),
+                                             InlineKeyboardButton(text='Отключить профиль', callback_data='off_profile'),
+                                             InlineKeyboardButton(text='Удалить профиль', callback_data='delete_profile')
+                                         ],
+                                         [
+                                             InlineKeyboardButton(text='Обратная связь', callback_data='feedback')
+                                         ]
+                                     ])
 
 edit_profile = InlineKeyboardMarkup(row_width=3,
                                     inline_keyboard=[
@@ -50,7 +50,16 @@ edit_profile = InlineKeyboardMarkup(row_width=3,
                                         ]
                                     ])
 
-
+assessment_menu = InlineKeyboardMarkup(row_width=2,
+                                       inline_keyboard=[
+                                           [
+                                               InlineKeyboardButton(text='❤️', callback_data='like'),
+                                               InlineKeyboardButton(text='💔', callback_data='dislike'),
+                                           ],
+                                           [
+                                               InlineKeyboardButton(text='В меню', callback_data='menu')
+                                           ]
+                                       ])
 
 get_back = InlineKeyboardMarkup(row_width=1,
                                 inline_keyboard=[
