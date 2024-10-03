@@ -4,6 +4,10 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy import or_, and_
+
 from keyboards.inline_keyboards import main_menu, main_settings
 from keyboards.default_keyboards import confirmation
 
@@ -15,23 +19,129 @@ from database.models import AccountsTable
 router = Router()
 
 
+async def search_accounts(user_is_male: bool, user_preference: str, user_age: int, user_chat_id: int):
+    if user_preference not in ['males', 'females', 'dont_care']:
+        return []  # Если предпочтение указано неправильно
+
+    async with accounts_db_session:
+        query = select(AccountsTable).filter(AccountsTable.chat_id != user_chat_id)  # Исключаем одинаковые chat_id
+
+        if user_is_male:
+            # Пользователь - мужчина
+            if user_preference == 'males':
+                # Ищет мужчин
+                query = query.filter(
+                    AccountsTable.isMale == True,
+                    or_(
+                        AccountsTable.friend_sex == 'males',
+                        AccountsTable.friend_sex == 'dont_care'
+                    ),
+                    AccountsTable.age.between(user_age - 3, user_age + 3)
+                )
+            elif user_preference == 'females':
+                # Ищет женщин
+                query = query.filter(
+                    AccountsTable.isMale == False,
+                    or_(
+                        AccountsTable.friend_sex == 'males',
+                        AccountsTable.friend_sex == 'dont_care'
+                    ),
+                    AccountsTable.age.between(user_age - 3, user_age + 3)
+                )
+            elif user_preference == 'dont_care':
+                # Ему все равно
+                query = query.filter(
+                    or_(
+                        and_(
+                            AccountsTable.isMale == True,
+                            or_(
+                                AccountsTable.friend_sex == 'males',
+                                AccountsTable.friend_sex == 'dont_care'
+                            )
+                        ),
+                        and_(
+                            AccountsTable.isMale == False,
+                            or_(
+                                AccountsTable.friend_sex == 'males',
+                                AccountsTable.friend_sex == 'dont_care'
+                            )
+                        )
+                    ),
+                    AccountsTable.age.between(user_age - 3, user_age + 3)
+                )
+
+        else:
+            # Пользователь - женщина
+            if user_preference == 'males':
+                # Ищет мужчин
+                query = query.filter(
+                    AccountsTable.isMale == True,
+                    or_(
+                        AccountsTable.friend_sex == 'females',
+                        AccountsTable.friend_sex == 'dont_care'
+                    ),
+                    AccountsTable.age.between(user_age - 3, user_age + 3)
+                )
+            elif user_preference == 'females':
+                # Ищет женщин
+                query = query.filter(
+                    AccountsTable.isMale == False,
+                    or_(
+                        AccountsTable.friend_sex == 'females',
+                        AccountsTable.friend_sex == 'dont_care'
+                    ),
+                    AccountsTable.age.between(user_age - 3, user_age + 3)
+                )
+            elif user_preference == 'dont_care':
+                # Ей все равно
+                query = query.filter(
+                    or_(
+                        and_(
+                            AccountsTable.isMale == True,
+                            or_(
+                                AccountsTable.friend_sex == 'females',
+                                AccountsTable.friend_sex == 'dont_care'
+                            )
+                        ),
+                        and_(
+                            AccountsTable.isMale == False,
+                            or_(
+                                AccountsTable.friend_sex == 'females',
+                                AccountsTable.friend_sex == 'dont_care'
+                            )
+                        )
+                    ),
+                    AccountsTable.age.between(user_age - 3, user_age + 3)
+                )
+
+        result = await accounts_db_session.execute(query)
+        return result.scalars().all()
+
+
 @router.callback_query(F.data == "menu")
 async def callback_menu(event: Message | CallbackQuery):
-    user = accounts_db_session.query(AccountsTable).filter_by(chat_id=event.chat.id).first()
-    hour = datetime.now().hour
+    async with accounts_db_session() as session:  # Use async context manager
+        async with session.begin():  # Optional: use a transaction
+            # Use the asynchronous query method
+            user_result = await session.execute(
+                select(AccountsTable).filter_by(chat_id=event.chat.id)
+            )
+            user = user_result.scalar_one_or_none()  # Get the first result or None
 
-    greetings = {
-        (6, 12): "Доброе утро",
-        (12, 18): "Добрый день",
-        (18, 24): "Добрый вечер",
-        (0, 6): "Доброй ночи",
-    }
-    greeting = next((msg for (start, end), msg in greetings.items() if start <= hour < end), "Привет")
+            hour = datetime.now().hour
 
-    if isinstance(event, Message):
-        await event.answer(f"{greeting} {user.name}! Добро пожаловать в меню", reply_markup=main_menu)
-    elif isinstance(event, CallbackQuery):
-        await event.message.answer(f"{greeting} {user.name}! Добро пожаловать в меню", reply_markup=main_menu)
+            greetings = {
+                (6, 12): "Доброе утро",
+                (12, 18): "Добрый день",
+                (18, 24): "Добрый вечер",
+                (0, 6): "Доброй ночи",
+            }
+            greeting = next((msg for (start, end), msg in greetings.items() if start <= hour < end), "Привет")
+
+            if isinstance(event, Message):
+                await event.answer(f"{greeting} {user.name}! Добро пожаловать в меню", reply_markup=main_menu)
+            elif isinstance(event, CallbackQuery):
+                await event.message.answer(f"{greeting} {user.name}! Добро пожаловать в меню", reply_markup=main_menu)
 
 
 @router.callback_query(F.data == "settings")
@@ -53,6 +163,7 @@ async def callback_disconnect_account(event: Message | CallbackQuery):
     if isinstance(event, Message):
         await event.answer("Вы уверенны?", reply_markup=confirmation)
     elif isinstance(event, CallbackQuery):
+        await event.message.delete()
         await event.message.answer("Вы уверенны?", reply_markup=confirmation)
 
     @router.message(F.text.in_(["Да", "Нет"]))
@@ -81,10 +192,20 @@ async def callback_delete_account(event: Message | CallbackQuery):
 @router.callback_query(F.data == "start_search")
 async def callback_find_people(event: Message | CallbackQuery):
     if isinstance(event, CallbackQuery):
-        user = accounts_db_session.query(AccountsTable).filter_by(chat_id=event.message.chat.id).first()
-        friend_find_sex = accounts_db_session.query(AccountsTable).filter_by(friend_sex=user.friend_sex, chat_id = not event.message.chat.id).first()
-        if friend_find_sex == "male":
-            friend_sex = accounts_db_session.query(AccountsTable).filter_by(isMale= None, chat_id = not event.message.chat.id).first()
+        async with accounts_db_session() as session:  # Use async context manager
+            async with session.begin():  # Optional: use a transaction
+                # Use the asynchronous query method
+                user = await session.execute(
+                    select(AccountsTable).filter_by(chat_id=event.message.chat.id)
+                )
+                user = user.scalar_one_or_none()  # Get the first result or None
+
+                if user:
+                    results = await search_accounts(user.isMale, user.friend_sex, user.age, user.chat_id)
+
+                    print(f"Найдено {len(results)} анкет:")
+                    for account in results:
+                        print(account.name, account.age, account.isMale, account.friend_sex)
 
 
 @router.callback_query(F.data == "like")
