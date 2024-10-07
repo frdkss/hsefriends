@@ -20,102 +20,126 @@ router = Router()
 
 
 async def search_accounts(user_is_male: bool, user_preference: str, user_age: int, user_chat_id: int):
-    if user_preference not in ['males', 'females', 'dont_care']:
-        return []  # Если предпочтение указано неправильно
+    # Исключаем текущего пользователя из поиска
+    query = select(AccountsTable).filter(AccountsTable.chat_id != user_chat_id)
 
-    async with accounts_db_session:
-        query = select(AccountsTable).filter(AccountsTable.chat_id != user_chat_id)  # Исключаем одинаковые chat_id
-
-        if user_is_male:
-            # Пользователь - мужчина
-            if user_preference == 'males':
-                # Ищет мужчин
-                query = query.filter(
-                    AccountsTable.isMale == True,
-                    or_(
-                        AccountsTable.friend_sex == 'males',
-                        AccountsTable.friend_sex == 'dont_care'
-                    ),
-                    AccountsTable.age.between(user_age - 3, user_age + 3)
+    # Логика для мужчины
+    if user_is_male:
+        if user_preference == 'males':
+            # Мужчина ищет мужчин
+            query = query.filter(
+                AccountsTable.isMale == True,  # Только мужчины
+                or_(
+                    AccountsTable.friend_sex == 'males',  # Которые ищут мужчин
+                    AccountsTable.friend_sex == 'dont_care'  # Или им всё равно
+                ),
+                # Скрываем мужчин, которые ищут женщин
+                and_(
+                    AccountsTable.friend_sex != 'females'
                 )
-            elif user_preference == 'females':
-                # Ищет женщин
-                query = query.filter(
-                    AccountsTable.isMale == False,
-                    or_(
-                        AccountsTable.friend_sex == 'males',
-                        AccountsTable.friend_sex == 'dont_care'
-                    ),
-                    AccountsTable.age.between(user_age - 3, user_age + 3)
+            )
+        elif user_preference == 'females':
+            # Мужчина ищет женщин
+            query = query.filter(
+                AccountsTable.isMale == False,  # Только женщины
+                or_(
+                    AccountsTable.friend_sex == 'males',  # Которые ищут мужчин
+                    AccountsTable.friend_sex == 'dont_care'  # Или им всё равно
+                ),
+                # Скрываем женщин, которые ищут женщин
+                and_(
+                    AccountsTable.friend_sex != 'females'
                 )
-            elif user_preference == 'dont_care':
-                # Ему все равно
-                query = query.filter(
-                    or_(
-                        and_(
-                            AccountsTable.isMale == True,
-                            or_(
-                                AccountsTable.friend_sex == 'males',
-                                AccountsTable.friend_sex == 'dont_care'
-                            )
-                        ),
-                        and_(
-                            AccountsTable.isMale == False,
-                            or_(
-                                AccountsTable.friend_sex == 'males',
-                                AccountsTable.friend_sex == 'dont_care'
-                            )
+            )
+        elif user_preference == 'dont_care':
+            # Мужчина ищет и мужчин, и женщин
+            query = query.filter(
+                or_(
+                    and_(
+                        AccountsTable.isMale == True,  # Мужчины
+                        or_(
+                            AccountsTable.friend_sex == 'males',  # Ищут мужчин
+                            AccountsTable.friend_sex == 'dont_care'  # Им всё равно
                         )
                     ),
-                    AccountsTable.age.between(user_age - 3, user_age + 3)
-                )
-
-        else:
-            # Пользователь - женщина
-            if user_preference == 'males':
-                # Ищет мужчин
-                query = query.filter(
+                    and_(
+                        AccountsTable.isMale == False,  # Женщины
+                        or_(
+                            AccountsTable.friend_sex == 'males',  # Ищут мужчин
+                            AccountsTable.friend_sex == 'dont_care'  # Им всё равно
+                        )
+                    )
+                ),
+                # Скрываем мужчин, которые ищут женщин, и женщин, которые ищут женщин
+                or_(
                     AccountsTable.isMale == True,
-                    or_(
-                        AccountsTable.friend_sex == 'females',
-                        AccountsTable.friend_sex == 'dont_care'
-                    ),
-                    AccountsTable.age.between(user_age - 3, user_age + 3)
+                    and_(
+                        AccountsTable.isMale == False,
+                        AccountsTable.friend_sex != 'females'
+                    )
                 )
-            elif user_preference == 'females':
-                # Ищет женщин
-                query = query.filter(
-                    AccountsTable.isMale == False,
-                    or_(
-                        AccountsTable.friend_sex == 'females',
-                        AccountsTable.friend_sex == 'dont_care'
-                    ),
-                    AccountsTable.age.between(user_age - 3, user_age + 3)
+            )
+
+    # Логика для женщины
+    else:
+        if user_preference == 'males':
+            # Женщина ищет мужчин
+            query = query.filter(
+                AccountsTable.isMale == True,  # Только мужчины
+                or_(
+                    AccountsTable.friend_sex == 'females',  # Ищут женщин
+                    AccountsTable.friend_sex == 'dont_care'  # Им всё равно
+                ),
+                # Скрываем мужчин, которые ищут мужчин
+                and_(
+                    AccountsTable.friend_sex != 'males'
                 )
-            elif user_preference == 'dont_care':
-                # Ей все равно
-                query = query.filter(
-                    or_(
-                        and_(
-                            AccountsTable.isMale == True,
-                            or_(
-                                AccountsTable.friend_sex == 'females',
-                                AccountsTable.friend_sex == 'dont_care'
-                            )
-                        ),
-                        and_(
-                            AccountsTable.isMale == False,
-                            or_(
-                                AccountsTable.friend_sex == 'females',
-                                AccountsTable.friend_sex == 'dont_care'
-                            )
+            )
+        elif user_preference == 'females':
+            # Женщина ищет женщин
+            query = query.filter(
+                AccountsTable.isMale == False,  # Только женщины
+                or_(
+                    AccountsTable.friend_sex == 'females',  # Ищут женщин
+                    AccountsTable.friend_sex == 'dont_care'  # Им всё равно
+                ),
+                # Скрываем женщин, которые ищут мужчин
+                and_(
+                    AccountsTable.friend_sex != 'males'
+                )
+            )
+        elif user_preference == 'dont_care':
+            # Женщина ищет и мужчин, и женщин
+            query = query.filter(
+                or_(
+                    and_(
+                        AccountsTable.isMale == True,  # Мужчины
+                        or_(
+                            AccountsTable.friend_sex == 'females',  # Ищут женщин
+                            AccountsTable.friend_sex == 'dont_care'  # Им всё равно
                         )
                     ),
-                    AccountsTable.age.between(user_age - 3, user_age + 3)
+                    and_(
+                        AccountsTable.isMale == False,  # Женщины
+                        or_(
+                            AccountsTable.friend_sex == 'females',  # Ищут женщин
+                            AccountsTable.friend_sex == 'dont_care'  # Им всё равно
+                        )
+                    )
+                ),
+                # Скрываем мужчин, которые ищут мужчин, и женщин, которые ищут мужчин
+                or_(
+                    AccountsTable.isMale == True,
+                    and_(
+                        AccountsTable.isMale == False,
+                        AccountsTable.friend_sex != 'males'
+                    )
                 )
+            )
 
-        result = await accounts_db_session.execute(query)
-        return result.scalars().all()
+    # Выполняем запрос
+    result = await accounts_db_session.execute(query)
+    return result.scalars().all()
 
 
 @router.callback_query(F.data == "menu")
@@ -143,6 +167,28 @@ async def callback_menu(event: Message | CallbackQuery):
             elif isinstance(event, CallbackQuery):
                 await event.message.answer(f"{greeting} {user.name}! Добро пожаловать в меню", reply_markup=main_menu)
 
+@router.callback_query(F.data == "profile")
+async def callback_profile(event: Message | CallbackQuery):
+    async with accounts_db_session() as session:  # Use async context manager
+        async with session.begin():  # Optional: use a transaction
+            # Use the asynchronous query method
+            user_result = await session.execute(
+                select(AccountsTable).filter_by(chat_id=event.message.chat.id)
+            )
+            user = user_result.scalar_one_or_none()
+
+            if isinstance(event, CallbackQuery):
+                await event.message.answer(f'Ваш профиль:'
+                                           f'\nИмя - {user.name}'
+                                           f'\nВозраст - {user.age}'
+                                           f'\nПол - {user.isMale}'
+                                           f'\nФакультет - {user.faculty}'
+                                           f'\nСтепень - {user.isBaccalaureate}'
+                                           f'\nКурс - {user.course}'
+                                           f'\n{user.photo}'
+                                           f'\nО тебе - {user.about}'
+                                           f'\nТы ищешь - {user.friend_sex}')
+                await session.close()
 
 @router.callback_query(F.data == "settings")
 async def callback_settings(event: Message | CallbackQuery):
@@ -191,9 +237,9 @@ async def callback_delete_account(event: Message | CallbackQuery):
 
 @router.callback_query(F.data == "start_search")
 async def callback_find_people(event: Message | CallbackQuery):
-    if isinstance(event, CallbackQuery):
-        async with accounts_db_session() as session:  # Use async context manager
-            async with session.begin():  # Optional: use a transaction
+    async with accounts_db_session() as session:  # Use async context manager
+        async with session.begin():
+            if isinstance(event, CallbackQuery):  # Optional: use a transaction
                 # Use the asynchronous query method
                 user = await session.execute(
                     select(AccountsTable).filter_by(chat_id=event.message.chat.id)
@@ -202,10 +248,11 @@ async def callback_find_people(event: Message | CallbackQuery):
 
                 if user:
                     results = await search_accounts(user.isMale, user.friend_sex, user.age, user.chat_id)
-
+                    print(results)
                     print(f"Найдено {len(results)} анкет:")
                     for account in results:
                         print(account.name, account.age, account.isMale, account.friend_sex)
+                await session.close()
 
 
 @router.callback_query(F.data == "like")
