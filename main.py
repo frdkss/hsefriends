@@ -28,10 +28,9 @@ async def main():
 
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
-    await create_db()
 
 if __name__ == "__main__":
     print("Bot started!" + colorama.Fore.RED)
     inits_logger.info('bot successfully started')
-
+    create_db()
     asyncio.run(main())

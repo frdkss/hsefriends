@@ -3,11 +3,15 @@ from aiogram.types import Message
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
+from database.db_cfg import statistics_db_session
+from database.models import StatTable
 from keyboards.inline_keyboards import first_registration_keyboard
 from log.logger_cfg import command_logger
 
 from callbacks import usr_callbacks
 from states import first_registration_state, rewrite_state
+
+from sqlalchemy.future import select
 
 router = Router()
 
@@ -114,3 +118,16 @@ async def command_edit_about(message: Message):
 @router.message(Command("edit_friend_sex"))
 async def command_edit_friend_sex(message: Message):
     await usr_callbacks.callback_edit_friend_sex(message)
+
+@router.message(Command("test"))
+async def command_test(message:Message):
+    async with statistics_db_session() as session:
+        async with session.begin():
+            qwe = await session.execute(select(StatTable))
+            ewq = qwe.scalar_one_or_none()
+            if qwe:
+                if ewq:
+                    print(ewq.account_id)
+                else:
+                    print("None")
+

@@ -166,7 +166,6 @@ async def callback_menu(event: Message | CallbackQuery):
                 await event.answer(f"{greeting} {user.name}! Добро пожаловать в меню", reply_markup=main_menu)
             elif isinstance(event, CallbackQuery):
                 await event.message.answer(f"{greeting} {user.name}! Добро пожаловать в меню", reply_markup=main_menu)
-
 @router.callback_query(F.data == "profile")
 async def callback_profile(event: Message | CallbackQuery):
     async with accounts_db_session() as session:  # Use async context manager

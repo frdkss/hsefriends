@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 
 from log.logger_cfg import inline_kb_logger
 
-from database.db_cfg import accounts_db_session
+# from database.db_cfg import accounts_db_session
 from database.models import AccountsTable
 from .forms.state_forms import FirstRegistration
 

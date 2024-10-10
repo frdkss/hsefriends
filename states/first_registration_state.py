@@ -21,7 +21,7 @@ router = Router()
 
 @router.callback_query(F.data == 'first_reg')
 async def user_first_reg(event: Message | CallbackQuery, state: FSMContext):
-    print(event.message.chat.id)
+    # print(event.message.chat.id)
     if isinstance(event, Message):
         inline_kb_logger.info('start reg')
         await state.set_state(FirstRegistration.username)
@@ -50,6 +50,13 @@ async def user_first_reg(event: Message | CallbackQuery, state: FSMContext):
 
         await state.update_data(chat_id=user_chat_id)
         await event.message.answer("Давай начнем! Напиши свое имя которое будет отображаться в профиле.")
+    # async with statistic_db_session() as session:
+    #     async with session.begin():
+    #         statistic_table = StatTable(
+    #             reg="asdasdasd"
+    #         )
+    #         statistic_db_session.add(statistic_table)
+    #         await statistic_db_session.commit()
 
 @router.message(Command('cancel'))
 async def cancel_reg(message: Message, state: FSMContext):
@@ -167,22 +174,24 @@ async def user_friend_sex_inf(message: Message, state: FSMContext):
 
     data = await state.get_data()
     print(data)
-    accounts_table = AccountsTable(
-        chat_id=data['chat_id'],
-        tg_id=data['username'],
-        isActive=True,
-        name=data['name'],
-        age=data['age'],
-        isMale=data['isMale'],
-        faculty=data['faculty'],
-        isBaccalaureate=data['isBaccalaureate'],
-        course=data['course'],
-        photo=data['photo'],
-        about=data['about'],
-        friend_sex=data['friends_sex']
-    )
-    accounts_db_session.add(accounts_table)
-    accounts_db_session.commit()
+    async with accounts_db_session() as session:  # Use async context manager
+        async with session.begin():
+            accounts_table = AccountsTable(
+                chat_id=data['chat_id'],
+                tg_id=data['username'],
+                isActive=True,
+                name=data['name'],
+                age=data['age'],
+                isMale=data['isMale'],
+                faculty=data['faculty'],
+                isBaccalaureate=data['isBaccalaureate'],
+                course=data['course'],
+                photo=data['photo'],
+                about=data['about'],
+                friend_sex=data['friends_sex']
+            )
+            accounts_db_session.add(accounts_table)
+            await accounts_db_session.commit()
 
     await message.answer(f"Регистраниця завершена!", reply_markup=ReplyKeyboardRemove())
     await usr_callbacks.callback_menu(message)
