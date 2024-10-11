@@ -41,7 +41,7 @@ class StatTable(Base):
     reg = Column(String(10))
 
     # Связь с таблицей AccountsTable (многие к одному)
-    account_id = Column(Integer, ForeignKey('Accounts.uid'))
+    account_id = Column(Integer, ForeignKey('Accounts.chat_id'))
     account = relationship("AccountsTable", back_populates="statistics")
 
 
