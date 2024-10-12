@@ -1,8 +1,10 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Table, MetaData
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.ext.asyncio import AsyncEngine
+
 Base = declarative_base()
+
 
 class AccountsTable(Base):
     __tablename__ = 'Accounts'
@@ -12,6 +14,7 @@ class AccountsTable(Base):
     tg_id = Column(String, nullable=False, unique=True)
     isActive = Column(Boolean, nullable=False)
     deleted_in = Column(String, nullable=True)
+    registration_time = Column(String, nullable=False)
     # user info
     name = Column(String(30), nullable=False)
     age = Column(Integer, nullable=False)
@@ -22,54 +25,37 @@ class AccountsTable(Base):
     photo = Column(String, nullable=True)
     about = Column(String, nullable=True)
     friend_sex = Column(String, nullable=False)
-    #temp
+    # temp
     last_uid = Column(Integer, default=0)
 
-    # Связь с таблицей StatisticTable (один ко многим)
-    statistics = relationship("StatTable", back_populates="account")
 
+async def create_stat_table(chat_id, engine: AsyncEngine):
+    table_name = f"stat_{chat_id}"
+    metadata = MetaData()
 
-class StatTable(Base):
-    __tablename__ = 'StatisticTable'
-    id = Column(Integer, primary_key=True)
-    chat_id = Column(Integer, nullable=False)
-    tg_id = Column(String, nullable=False)
-    isMale = Column(Boolean, nullable=False)
-    age = Column(Integer, nullable=False)
-    friend_sex = Column(String, nullable=False)
+    stat_table = Table(
+        table_name,
+        metadata,
+        # autofill from accounts
+        Column('id', Integer, primary_key=True),
+        Column('chat_id', Integer, nullable=False),
+        Column('tg_id', String, nullable=False),
+        Column('isMale', Boolean, nullable=False),
+        Column('age', Integer, nullable=False),
+        Column('friend_sex', String, nullable=False),
+        Column('registration_time', String(17)),
+        # autofill from user action
+        Column('likes', Integer, default=0),
+        Column('dislikes', Integer, default=0),
+        Column('profile_likes', Integer, default=0),
+        Column('profile_dislikes', Integer, default=0),
+        Column('user_sessions', Integer),
+        Column('time_session', Integer),
+        extend_existing=True
+    )
 
-    reg = Column(String(10))
+    # Используем асинхронный контекст для создания таблицы
+    async with engine.begin() as conn:
+        await conn.run_sync(metadata.create_all)
 
-    # Связь с таблицей AccountsTable (многие к одному)
-    account_id = Column(Integer, ForeignKey('Accounts.chat_id'))
-    account = relationship("AccountsTable", back_populates="statistics")
-
-
-# class StatisticTable(Base):
-#     @declared_attr
-#     def __tablename__(cls):
-#         return f'Stat_{cls.account.chat_id}'
-#     # autofill
-#     id = Column(Integer, primary_key=True)
-#
-#     account_id = Column(Integer, ForeignKey('Accounts.uid'), nullable=False)
-#     account = relationship("AccountsTable", back_populates="statistics")
-#
-#     chat_id = Column(Integer, nullable=False, unique=True)
-#     age = Column(Integer, nullable=False)
-#     isMale = Column(Boolean, nullable=False)
-#     tg_id = Column(String, nullable=False, unique=True)
-#
-#     likes = Column(Integer, default=0)
-#     dislikes = Column(Integer, default=0)
-#
-#     profile_likes = Column(Integer, default=0)
-#     profile_dislikes = Column(Integer, default=0)
-#
-#     user_sessions = Column(Integer)
-#     time_session = Column(Integer)
-#
-#     registration_time = Column(String(17))
-#
-#     def __init__(self, account: AccountsTable):
-#         self.account = account
+    return stat_table

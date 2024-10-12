@@ -1,3 +1,4 @@
+import datetime
 import os
 
 from aiogram import Router, F
@@ -180,6 +181,7 @@ async def user_friend_sex_inf(message: Message, state: FSMContext):
                 chat_id=data['chat_id'],
                 tg_id=data['username'],
                 isActive=True,
+                registration_time=datetime.datetime.now(),
                 name=data['name'],
                 age=data['age'],
                 isMale=data['isMale'],

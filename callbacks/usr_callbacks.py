@@ -1,3 +1,5 @@
+import html
+
 from datetime import datetime
 
 from aiogram import Router, F
@@ -163,10 +165,10 @@ async def callback_menu(event: Message | CallbackQuery):
             greeting = next((msg for (start, end), msg in greetings.items() if start <= hour < end), "Привет")
 
             if isinstance(event, Message):
-                await event.answer(f"{greeting} {user.name}! Добро пожаловать в меню", reply_markup=main_menu)
+                await event.answer(f"{greeting} {html.escape(user.name)}! Добро пожаловать в меню", reply_markup=main_menu)
             elif isinstance(event, CallbackQuery):
                 await event.message.delete()
-                await event.message.answer(f"{greeting} {user.name}! Добро пожаловать в меню", reply_markup=main_menu)
+                await event.message.answer(f"{greeting} {html.escape(user.name)}! Добро пожаловать в меню", reply_markup=main_menu)
 @router.callback_query(F.data == "profile")
 async def callback_profile(event: Message | CallbackQuery):
     async with accounts_db_session() as session:  # Use async context manager
@@ -179,7 +181,7 @@ async def callback_profile(event: Message | CallbackQuery):
 
             if isinstance(event, CallbackQuery):
                 await event.message.answer(f'Ваш профиль:'
-                                           f'\nИмя - {user.name}'
+                                           f'\nИмя - {html.escape(user.name)}'
                                            f'\nВозраст - {user.age}'
                                            f'\nПол - {user.isMale}'
                                            f'\nФакультет - {user.faculty}'

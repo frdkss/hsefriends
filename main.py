@@ -15,6 +15,7 @@ from states import first_registration_state
 
 colorama.init()
 
+
 async def main():
     load_dotenv(find_dotenv('src/private/tokens.env'))
     dp = Dispatcher()
@@ -28,6 +29,7 @@ async def main():
 
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     print("Bot started!" + colorama.Fore.RED)
