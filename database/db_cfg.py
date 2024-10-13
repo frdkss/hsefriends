@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy.future import select
 from sqlalchemy import Table, MetaData
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_scoped_session, async_sessionmaker
-from .models import Base, AccountsTable, create_stat_table  # импорт моделей
+from .models import Base, AccountsTable, LikedAccountsTable, create_stat_table  # импорт моделей
 
 # Конфигурация для подключения к базе данных
 DATABASE_URL_ACCOUNTS = "sqlite+aiosqlite:///./database/accounts.db"
@@ -46,7 +46,7 @@ statistics_db_session = async_scoped_session(
 # Функция для автоматического создания таблиц
 async def init_db():
     async with engine_accounts.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all, tables=[AccountsTable.__table__])
+        await conn.run_sync(Base.metadata.create_all, tables=[AccountsTable.__table__, LikedAccountsTable.__table__])
 
     # async with engine_statistic.begin() as conn:
     #     await conn.run_sync(Base.metadata.create_all, tables=[StatTable.__table__])

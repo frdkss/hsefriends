@@ -1,21 +1,21 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 first_registration_keyboard = InlineKeyboardMarkup(row_width=1,
-                                             inline_keyboard=[
-                                                 [InlineKeyboardButton(text='Регистрация', callback_data='first_reg')]
-                                             ])
+                                                   inline_keyboard=[
+                                                       [InlineKeyboardButton(text='Регистрация', callback_data='first_reg')]
+                                                   ])
 
-main_menu = InlineKeyboardMarkup(row_width=2,
-                            inline_keyboard=[
-                                [
-                                    InlineKeyboardButton(text='Искать людей!', callback_data='start_search'),
-                                    InlineKeyboardButton(text='Мой профиль', callback_data='profile'),
-                                    InlineKeyboardButton(text='Настройки', callback_data='settings')
-                                ],
-                                [
-                                    InlineKeyboardButton(text='Помощь', callback_data='help')
-                                ]
-                            ])
+main_menu = InlineKeyboardMarkup(row_width=3,
+                                 inline_keyboard=[
+                                     [
+                                         InlineKeyboardButton(text='Искать людей!', callback_data='start_search'),
+                                         InlineKeyboardButton(text='Мой профиль', callback_data='profile'),
+                                         InlineKeyboardButton(text='Настройки', callback_data='settings')
+                                     ],
+                                     [
+                                         InlineKeyboardButton(text='Помощь', callback_data='help')
+                                     ]
+                                 ])
 
 main_settings = InlineKeyboardMarkup(row_width=3,
                                      inline_keyboard=[
@@ -61,7 +61,13 @@ assessment_menu = InlineKeyboardMarkup(row_width=2,
                                            ]
                                        ])
 
-
+research = InlineKeyboardMarkup(row_width=2,
+                                inline_keyboard=[
+                                    [
+                                        InlineKeyboardButton(text='Перезапустить поиск', callback_data="restart_search"),
+                                        InlineKeyboardButton(text='Обновить анкеты', callback_data='update_search')
+                                    ]
+                                ])
 
 get_back = InlineKeyboardMarkup(row_width=1,
                                 inline_keyboard=[

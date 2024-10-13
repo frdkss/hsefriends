@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy import Table, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -27,6 +27,13 @@ class AccountsTable(Base):
     friend_sex = Column(String, nullable=False)
     # temp
     last_uid = Column(Integer, default=0)
+
+
+class LikedAccountsTable(Base):
+    __tablename__ = 'LikedAccounts'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    chat_id = Column(Integer, ForeignKey('Accounts.chat_id'), nullable=False)  # Идентификатор пользователя
+    liked_uid = Column(Integer, ForeignKey('Accounts.uid'), nullable=False)  # Идентификатор лайкнутой анкеты
 
 
 async def create_stat_table(chat_id, engine: AsyncEngine):

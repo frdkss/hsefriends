@@ -120,7 +120,7 @@ async def user_course_inf(message: Message, state: FSMContext):
 @router.message(FirstRegistration.photo, lambda message: message.photo or message.text)
 async def user_photo_inf(message: Message, state: FSMContext):
     if message.text == "Без фото":
-        await state.update_data(photo='None')
+        await state.update_data(photo=None)
         await state.set_state(FirstRegistration.about)
     else:
         # Получаем объект бота из message
@@ -142,7 +142,7 @@ async def user_photo_inf(message: Message, state: FSMContext):
         file_path = file.file_path
 
         # Скачиваем файл
-        destination = f"{downloads_dir}/{file_id}.jpg"  # Путь, куда сохранить фото
+        destination = f"{file_id}.jpg"  # Путь, куда сохранить фото
         await bot.download_file(file_path, destination)
 
         await message.answer("Фото успешно загружено!")
@@ -156,7 +156,7 @@ async def user_photo_inf(message: Message, state: FSMContext):
 @router.message(FirstRegistration.about)
 async def user_about_inf(message: Message, state: FSMContext):
     if message.text == "Без текста":
-        await state.update_data(about='None')
+        await state.update_data(about=None)
     else:
         await state.update_data(about=message.text)
 
