@@ -5,7 +5,6 @@ from datetime import datetime
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.fsm.context import FSMContext
 
 from sqlalchemy.future import select
 from sqlalchemy import or_, and_
@@ -13,7 +12,7 @@ from sqlalchemy import or_, and_
 from keyboards.inline_keyboards import main_menu, main_settings, assessment_menu, research, feedback_url
 from keyboards.default_keyboards import confirmation
 
-from database.db_cfg import accounts_db_session, check_mutual_like, save_like
+from database.db_cfg import accounts_db_session, save_like
 from database.models import AccountsTable
 
 router = Router()
@@ -171,9 +170,8 @@ async def get_next_account(chat_id, update_last_uid=True):
                         user.last_uid = 0  # Сбрасываем last_uid, чтобы начать просмотр заново
                         await session.commit()
                     return None
+                await session.close()
     return None
-
-
 
 
 async def display_account(event: CallbackQuery, account):
@@ -206,24 +204,38 @@ async def display_account(event: CallbackQuery, account):
 
 async def send_like_request(event: CallbackQuery, liked_chat_id: int, user_chat_id: int):
     """Отправляет запрос на лайк другому пользователю."""
-    markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Взаимный лайк", callback_data=f"mutual_like_{user_chat_id}"),
-         InlineKeyboardButton(text="Отказаться", callback_data="reject_like")]
-    ])
 
-    await event.bot.send_message(
-        liked_chat_id,
-        f"Вас лайкнули! Хотите поставить лайк в ответ?",
-        reply_markup=markup
-    )
+    like_request = InlineKeyboardMarkup(row_width=2,
+                                        inline_keyboard=[
+                                            [
+                                                InlineKeyboardButton(text="Взаимный лайк", callback_data=f"mutual_like_{user_chat_id}"),
+                                                InlineKeyboardButton(text="Отказаться", callback_data="reject_like")
+                                            ],
+                                            [
+                                                InlineKeyboardButton(text="В меню", callback_data="menu")
+                                            ]
+    ])
+    async with accounts_db_session() as session:
+        async with session.begin():
+            await event.bot.send_message(
+                liked_chat_id,
+                f"Вас лайкнули!\n"
+                f" \n"
+                f"Хотите поставить лайк в ответ?",
+                reply_markup=like_request
+            )
+            await session.close()
 
 
 async def send_mutual_like_notification(event: CallbackQuery, chat_id: int, telegram_username: str):
     """Отправляет уведомление о взаимном лайке."""
-    await event.bot.send_message(
-        chat_id,
-        f"У вас взаимный лайк! Вот tg_id: {telegram_username}"
-    )
+    async with accounts_db_session() as session:
+        async with session.begin():
+            await event.bot.send_message(
+                chat_id,
+                f"У вас взаимный лайк! @{telegram_username}"
+            )
+            await session.close()
 
 
 @router.callback_query(F.data == "menu")
@@ -232,7 +244,7 @@ async def callback_menu(event: Message | CallbackQuery):
         async with session.begin():  # Optional: use a transaction
             # Use the asynchronous query method
             user_result = await session.execute(
-                select(AccountsTable).filter_by(chat_id=event.chat.id)
+                select(AccountsTable).filter_by(chat_id=event.chat.id if isinstance(event, Message) else event.message.chat.id)
             )
             user = user_result.scalar_one_or_none()  # Get the first result or None
 
@@ -251,6 +263,7 @@ async def callback_menu(event: Message | CallbackQuery):
             elif isinstance(event, CallbackQuery):
                 await event.message.delete()
                 await event.message.answer(f"{greeting} {html.escape(user.name)}! Добро пожаловать в меню", reply_markup=main_menu)
+            await session.close()
 
 
 @router.callback_query(F.data == "profile")
@@ -313,33 +326,38 @@ async def callback_settings(event: Message | CallbackQuery):
 
 @router.callback_query(F.data == "off_profile")
 async def callback_disconnect_account(event: Message | CallbackQuery):
-    if isinstance(event, Message):
-        await event.answer("Вы уверенны?", reply_markup=confirmation)
-    elif isinstance(event, CallbackQuery):
-        await event.message.delete()
-        await event.message.answer("Вы уверенны?", reply_markup=confirmation)
+    # if isinstance(event, Message):
+    #     await event.answer("Вы уверенны?", reply_markup=confirmation)
+    # elif isinstance(event, CallbackQuery):
+    #     await event.message.delete()
+    #     await event.message.answer("Вы уверенны?", reply_markup=confirmation)
+    #
+    # @router.message(F.text.in_(["Да", "Нет"]))
+    # async def handle_confirmation(message: Message):
+    #     if message.text.lower() == "да":
+    #         pass
+    #     elif message.text.lower() == "нет":
+    #         await callback_settings(message)
 
-    @router.message(F.text.in_(["Да", "Нет"]))
-    async def handle_confirmation(message: Message):
-        if message.text.lower() == "да":
-            pass
-        elif message.text.lower() == "нет":
-            await callback_settings(message)
+    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
+    await callback_menu(event)
 
 
 @router.callback_query(F.data == "delete_profile")
 async def callback_delete_account(event: Message | CallbackQuery):
-    if isinstance(event, Message):
-        await event.answer("Вы уверенны?", reply_markup=confirmation)
-    elif isinstance(event, CallbackQuery):
-        await event.message.answer("Вы уверенны?", reply_markup=confirmation)
-
-    @router.message(F.text.in_(["Да", "Нет"]))
-    async def handle_confirmation(message: Message):
-        if message.text.lower() == "да":
-            pass
-        elif message.text.lower() == "нет":
-            await callback_settings(message)
+    # if isinstance(event, Message):
+    #     await event.answer("Вы уверенны?", reply_markup=confirmation)
+    # elif isinstance(event, CallbackQuery):
+    #     await event.message.answer("Вы уверенны?", reply_markup=confirmation)
+    #
+    # @router.message(F.text.in_(["Да", "Нет"]))
+    # async def handle_confirmation(message: Message):
+    #     if message.text.lower() == "да":
+    #         pass
+    #     elif message.text.lower() == "нет":
+    #         await callback_settings(message)
+    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
+    await callback_menu(event)
 
 
 @router.callback_query(F.data == "start_search")
@@ -364,6 +382,7 @@ async def callback_find_people(event: CallbackQuery):
                     await display_account(event, first_account)  # Отправляем анкету с фото или текстом
                 else:
                     await event.message.edit_text("Анкеты не найдены.")
+                await session.close()
 
 
 @router.callback_query(F.data == "restart_search")
@@ -373,6 +392,7 @@ async def restart_search(callback: CallbackQuery):
         user.last_uid = 0  # Сбрасываем last_uid
         await session.commit()
         await callback.message.edit_text("Поиск начат заново.", reply_markup=assessment_menu)
+
 
 @router.callback_query(F.data == "like")
 async def callback_like(event: CallbackQuery):
@@ -431,11 +451,12 @@ async def handle_mutual_like(event: CallbackQuery):
             acc = liked_tg_id.scalar_one_or_none()
             user = user_tg_id.scalar_one_or_none()
 
-    # Отправляем tg_id друг другу при взаимном лайке
+            # Отправляем tg_id друг другу при взаимном лайке
             await send_mutual_like_notification(event, user_chat_id, acc.tg_id)
             await send_mutual_like_notification(event, liked_chat_id, user.tg_id)
 
             await event.answer("Взаимный лайк! Вам отправлено tg_id пользователя.")
+            await session.close()
 
 
 @router.callback_query(F.data == "reject_like")
@@ -484,60 +505,71 @@ async def callback_feedback(event: Message | CallbackQuery):
 
 
 @router.callback_query(F.data == "edit_profile")
-async def callback_edit_profile(call: CallbackQuery):
-    pass  # открыть меню с изменениями
+async def callback_edit_profile(event: Message | CallbackQuery):
+    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
+    await callback_menu(event)  # открыть меню с изменениями
 
 
 @router.callback_query(F.data == "feedback_account")
 async def callback_send_feedback(call: CallbackQuery):
-    pass  # сделать тут лог
+    pass # сделать тут лог
 
 
 @router.callback_query(F.data == "edit_profile")
 async def callback_edit_profile(event: Message | CallbackQuery):
-    pass
+    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
+    await callback_menu(event)
 
 
 @router.callback_query(F.data == "edit_name")
 async def callback_edit_name(event: Message | CallbackQuery):
-    pass
+    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
+    await callback_menu(event)
 
 
 @router.callback_query(F.data == "edit_age")
 async def callback_edit_age(event: Message | CallbackQuery):
-    pass
+    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
+    await callback_menu(event)
 
 
 @router.callback_query(F.data == "edit_sex")
 async def callback_edit_sex(event: Message | CallbackQuery):
-    pass
+    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
+    await callback_menu(event)
 
 
 @router.callback_query(F.data == "edit_faculty")
 async def callback_edit_faculty(event: Message | CallbackQuery):
-    pass
+    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
+    await callback_menu(event)
 
 
 @router.callback_query(F.data == "edit_degree")
 async def callback_edit_degree(event: Message | CallbackQuery):
-    pass
+    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
+    await callback_menu(event)
 
 
 @router.callback_query(F.data == "edit_course")
 async def callback_edit_course(event: Message | CallbackQuery):
-    pass
+    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
+    await callback_menu(event)
 
 
 @router.callback_query(F.data == "edit_photo")
 async def callback_edit_photo(event: Message | CallbackQuery):
-    pass
+    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
+    await callback_menu(event)
 
 
 @router.callback_query(F.data == "edit_about")
 async def callback_edit_about(event: Message | CallbackQuery):
-    pass
+    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
+    await callback_menu(event)
 
 
 @router.callback_query(F.data == "edit_friend_sex")
 async def callback_edit_friend_sex(event: Message | CallbackQuery):
-    pass
+    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
+    await callback_menu(event)

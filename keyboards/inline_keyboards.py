@@ -28,6 +28,9 @@ main_settings = InlineKeyboardMarkup(row_width=3,
                                          ],
                                          [
                                              InlineKeyboardButton(text='Обратная связь', callback_data='feedback')
+                                         ],
+                                         [
+                                             InlineKeyboardButton(text="В меню", callback_data="menu")
                                          ]
                                      ])
 
@@ -35,6 +38,9 @@ feedback_url = InlineKeyboardMarkup(row_width=1,
                                     inline_keyboard=[
                                         [
                                             InlineKeyboardButton(text="Связаться с разработчиком", url="https://t.me/qqqqqqqqqpqpws", callback_data="feedback_account")
+                                        ],
+                                        [
+                                            InlineKeyboardButton(text="В меню", callback_data="menu")
                                         ]
                                     ])
 
@@ -54,6 +60,9 @@ edit_profile = InlineKeyboardMarkup(row_width=3,
                                             InlineKeyboardButton(text='Фото', callback_data='edit_photo'),
                                             InlineKeyboardButton(text='"О себе"', callback_data='edit_about'),
                                             InlineKeyboardButton(text='Пол друга', callback_data='edit_friend_sex')
+                                        ],
+                                        [
+                                            InlineKeyboardButton(text="В меню", callback_data="menu")
                                         ]
                                     ])
 assessment_menu = InlineKeyboardMarkup(row_width=2,
@@ -72,10 +81,9 @@ research = InlineKeyboardMarkup(row_width=2,
                                     [
                                         InlineKeyboardButton(text='Перезапустить поиск', callback_data="restart_search"),
                                         InlineKeyboardButton(text='Обновить анкеты', callback_data='update_search')
+                                    ],
+                                    [
+                                        InlineKeyboardButton(text="В меню", callback_data="menu")
                                     ]
                                 ])
 
-get_back = InlineKeyboardMarkup(row_width=1,
-                                inline_keyboard=[
-                                    [InlineKeyboardButton(text="back", callback_data="back")]
-                                ])

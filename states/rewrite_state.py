@@ -5,6 +5,7 @@ from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from sqlalchemy import select
 
+from callbacks.usr_callbacks import callback_menu
 from database.db_cfg import accounts_db_session
 from keyboards.default_keyboards import user_sex, user_course_bac, no_about, user_friend_sex, no_photo
 
@@ -129,7 +130,7 @@ async def user_about_inf(message: Message, state: FSMContext):
 
 
 @router.message(RewriteProfile.friend_sex)
-async def user_friend_sex_inf(message: Message, state: FSMContext):
+async def user_friend_sex_inf(message: Message, state: FSMContext, event: Message | CallbackQuery):
     if message.text == "Мужчины":
         await state.update_data(friends_sex="males")
     elif message.text == "Девушки":
@@ -158,3 +159,4 @@ async def user_friend_sex_inf(message: Message, state: FSMContext):
 
     await message.answer("Профиль успешно обновлен!", reply_markup=ReplyKeyboardRemove())
     await state.clear()
+    await callback_menu(event)
