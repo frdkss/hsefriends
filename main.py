@@ -19,7 +19,7 @@ colorama.init()
 async def main():
     load_dotenv(find_dotenv('src/private/tokens.env'))
     dp = Dispatcher()
-    bot = Bot(os.getenv("TEST_TOKEN"), parse_mode=ParseMode.HTML)
+    bot = Bot(os.getenv("RELEASE_TOKEN"), parse_mode=ParseMode.HTML)
 
     dp.include_routers(
         usr_commands.router,
