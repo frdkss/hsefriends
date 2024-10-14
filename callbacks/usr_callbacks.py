@@ -170,7 +170,7 @@ async def get_next_account(chat_id, update_last_uid=True):
                         user.last_uid = 0  # Сбрасываем last_uid, чтобы начать просмотр заново
                         await session.commit()
                     return None
-                await session.close()
+            await session.close()
     return None
 
 
@@ -202,40 +202,88 @@ async def display_account(event: CallbackQuery, account):
         await event.message.answer(profile_text, reply_markup=assessment_menu)
 
 
-async def send_like_request(event: CallbackQuery, liked_chat_id: int, user_chat_id: int):
-    """Отправляет запрос на лайк другому пользователю."""
+async def send_profile(event: CallbackQuery, chat_id: int, account):
+    """Отправляет анкету пользователя."""
+    gender = "Парень" if account.isMale else "Девушка"
+    degree = "Бакалавриат" if account.isBaccalaureate else "Магистратура"
 
-    like_request = InlineKeyboardMarkup(row_width=2,
-                                        inline_keyboard=[
-                                            [
-                                                InlineKeyboardButton(text="Взаимный лайк", callback_data=f"mutual_like_{user_chat_id}"),
-                                                InlineKeyboardButton(text="Отказаться", callback_data="reject_like")
-                                            ],
-                                            [
-                                                InlineKeyboardButton(text="В меню", callback_data="menu")
-                                            ]
-    ])
+    profile_text = (
+        f"Имя - {html.escape(account.name)}\n"
+        f"Возраст - {account.age}\n"
+        f"Пол - {gender}\n"
+        f"Факультет - {account.faculty}\n"
+        f"Степень - {degree}\n"
+        f"Курс - {account.course}\n"
+    )
+    if account.about:
+        profile_text += f"О себе - {account.about}\n"
+
+    # Отправляем анкету с фото или без него
+    if account.photo:
+        photo_path = os.path.abspath(account.photo)
+        photo = FSInputFile(photo_path)
+        await event.bot.send_photo(chat_id, photo=photo, caption=profile_text)
+    else:
+        await event.bot.send_message(chat_id, profile_text)
+
+
+async def send_like_request(event: CallbackQuery, liked_chat_id: int, user_chat_id: int):
+    """Отправляет запрос на лайк другому пользователю и показывает его анкету."""
+
     async with accounts_db_session() as session:
-        async with session.begin():
-            await event.bot.send_message(
-                liked_chat_id,
-                f"Вас лайкнули!\n"
-                f" \n"
-                f"Хотите поставить лайк в ответ?",
-                reply_markup=like_request
-            )
-            await session.close()
+        result = await session.execute(select(AccountsTable).where(AccountsTable.chat_id == user_chat_id))
+        user_account = result.scalars().first()
+
+        if not user_account:
+            await event.bot.send_message(liked_chat_id, "Ошибка: пользователь не найден.")
+            return
+
+        # Формируем текст анкеты
+        gender = "Парень" if user_account.isMale else "Девушка"
+        degree = "Бакалавриат" if user_account.isBaccalaureate else "Магистратура"
+
+        profile_text = (
+            f"Имя - {html.escape(user_account.name)}\n"
+            f"Возраст - {user_account.age}\n"
+            f"Пол - {gender}\n"
+            f"Факультет - {user_account.faculty}\n"
+            f"Степень - {degree}\n"
+            f"Курс - {user_account.course}\n"
+        )
+        if user_account.about:
+            profile_text += f"О себе - {user_account.about}\n"
+
+        # Отправляем анкету с фото или без него
+        if user_account.photo:
+            photo_path = os.path.abspath(user_account.photo)
+            photo = FSInputFile(photo_path)
+            await event.bot.send_photo(liked_chat_id, photo=photo, caption=profile_text)
+        else:
+            await event.bot.send_message(liked_chat_id, profile_text)
+
+        # Отправляем запрос на лайк
+        like_request = InlineKeyboardMarkup(row_width=2, inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Взаимный лайк", callback_data=f"mutual_like_{user_chat_id}"),
+                InlineKeyboardButton(text="Отказаться", callback_data="reject_like")
+            ],
+            [
+                InlineKeyboardButton(text="В меню", callback_data="menu")
+            ]
+        ])
+        await event.bot.send_message(
+            liked_chat_id,
+            "Хотите поставить лайк в ответ?",
+            reply_markup=like_request
+        )
 
 
 async def send_mutual_like_notification(event: CallbackQuery, chat_id: int, telegram_username: str):
     """Отправляет уведомление о взаимном лайке."""
-    async with accounts_db_session() as session:
-        async with session.begin():
-            await event.bot.send_message(
-                chat_id,
-                f"У вас взаимный лайк! @{telegram_username}"
-            )
-            await session.close()
+    await event.bot.send_message(
+        chat_id,
+        f"У вас взаимный лайк! @{telegram_username}"
+    )
 
 
 @router.callback_query(F.data == "menu")
@@ -446,18 +494,26 @@ async def handle_mutual_like(event: CallbackQuery):
 
     async with accounts_db_session() as session:
         async with session.begin():
+            # Получаем данные анкет обоих пользователей
             liked_tg_id = await session.execute(select(AccountsTable).filter_by(chat_id=liked_chat_id))
             user_tg_id = await session.execute(select(AccountsTable).filter_by(chat_id=user_chat_id))
             acc = liked_tg_id.scalar_one_or_none()
             user = user_tg_id.scalar_one_or_none()
 
-            # Отправляем tg_id друг другу при взаимном лайке
+            if not acc or not user:
+                await event.answer("Ошибка: один из пользователей не найден.")
+                return
+
+            # Отправляем анкеты пользователям
+            await send_profile(event, user_chat_id, acc)
+            await send_profile(event, liked_chat_id, user)
+
+            # Отправляем уведомления о взаимном лайке
             await send_mutual_like_notification(event, user_chat_id, acc.tg_id)
             await send_mutual_like_notification(event, liked_chat_id, user.tg_id)
 
-            await event.answer("Взаимный лайк! Вам отправлено tg_id пользователя.")
+            await event.answer("Взаимный лайк! Вам отправлены анкеты пользователей.")
             await session.close()
-
 
 @router.callback_query(F.data == "reject_like")
 async def callback_reject_like(event: CallbackQuery):
@@ -512,7 +568,7 @@ async def callback_edit_profile(event: Message | CallbackQuery):
 
 @router.callback_query(F.data == "feedback_account")
 async def callback_send_feedback(call: CallbackQuery):
-    pass # сделать тут лог
+    pass  # сделать тут лог
 
 
 @router.callback_query(F.data == "edit_profile")
