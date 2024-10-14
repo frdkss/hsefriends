@@ -11,7 +11,7 @@ from database.db_cfg import create_db
 
 from handlers import usr_commands
 from callbacks import usr_callbacks
-from states import first_registration_state
+from states import first_registration_state, rewrite_state
 
 colorama.init()
 
@@ -24,7 +24,8 @@ async def main():
     dp.include_routers(
         usr_commands.router,
         usr_callbacks.router,
-        first_registration_state.router
+        first_registration_state.router,
+        rewrite_state.router
     )
 
     await bot.delete_webhook(drop_pending_updates=True)

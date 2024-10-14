@@ -100,6 +100,28 @@ async def transfer_all_accounts_data(accounts_session, statistics_session, liked
         await transfer_data(account.chat_id, accounts_session, statistics_session, liked_session)
 
 
+async def save_like(user_chat_id: int, liked_chat_id: int):
+    """Сохраняет факт лайка в базу данных."""
+    async with liked_db_session() as session:
+        liked_table = await create_liked_table(user_chat_id, engine_like)
+        insert_stmt = liked_table.insert().values(
+            chat_id=user_chat_id,
+            liked_account=liked_chat_id
+        )
+        await session.execute(insert_stmt)
+        await session.commit()
+
+
+async def check_mutual_like(liked_chat_id: int, user_chat_id: int) -> bool:
+    """Проверяет, был ли взаимный лайк."""
+    async with liked_db_session() as session:
+        liked_table = await create_liked_table(liked_chat_id, engine_like)
+        result = await session.execute(
+            select(liked_table).where(liked_table.c.liked_account == user_chat_id)
+        )
+        return result.scalar_one_or_none() is not None
+
+
 # Базовый класс для моделей
 # Функция для автоматического создания таблиц
 async def init_db():

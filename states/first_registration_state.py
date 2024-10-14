@@ -123,31 +123,29 @@ async def user_photo_inf(message: Message, state: FSMContext):
         await state.update_data(photo=None)
         await state.set_state(FirstRegistration.about)
     else:
-        # Получаем объект бота из message
-        bot = message.bot
+        bot = message.bot  # Получаем объект бота
 
         # Создаем директорию, если она не существует
         downloads_dir = f'account_photos/{message.chat.id}'
         if not os.path.exists(downloads_dir):
             os.makedirs(downloads_dir)
 
-        # Получаем наибольший размер фото
-        photo = message.photo[-1]
+        try:
+            # Получаем наибольший размер фото
+            photo = message.photo[-1]
+            file_id = photo.file_id  # Получаем file_id
 
-        # Получаем file_id
-        file_id = photo.file_id
+            # Загружаем файл по file_id
+            file = await bot.get_file(file_id)
 
-        # Загружаем файл по file_id
-        file = await bot.get_file(file_id)
-        file_path = file.file_path
+            # Сохраняем файл в нужную директорию
+            destination = f"{downloads_dir}/{file_id}.jpg"
+            await bot.download_file(file.file_path, destination)
 
-        # Скачиваем файл
-        destination = f"{file_id}.jpg"  # Путь, куда сохранить фото
-        await bot.download_file(file_path, destination)
-
-        await message.answer("Фото успешно загружено!")
-        # Сбрасываем состояние после получения фото
-        await state.update_data(photo=destination)
+            await message.answer("Фото успешно загружено!")
+            await state.update_data(photo=destination)  # Сохраняем путь в состояние
+        except Exception as e:
+            await message.answer(f"Ошибка при загрузке фото: {e}")
 
     await message.answer("Расскажи о себе", reply_markup=no_about)
     await state.set_state(FirstRegistration.about)

@@ -4,21 +4,17 @@ import os
 from datetime import datetime
 
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, FSInputFile, ReplyKeyboardRemove
+from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import or_, and_
 
 from keyboards.inline_keyboards import main_menu, main_settings, assessment_menu, research, feedback_url
-from keyboards.default_keyboards import confirmation, user_course_bac, user_sex
+from keyboards.default_keyboards import confirmation
 
-from states import rewrite_state
-
-from database.db_cfg import accounts_db_session
+from database.db_cfg import accounts_db_session, check_mutual_like, save_like
 from database.models import AccountsTable
-from states.rewrite_state import state_user_rewrite
 
 router = Router()
 
@@ -146,7 +142,7 @@ async def search_accounts(user_is_male: bool, user_preference: str, user_age: in
     return result.scalars().all()
 
 
-async def get_next_account(chat_id):
+async def get_next_account(chat_id, update_last_uid=True):
     async with accounts_db_session() as session:
         async with session.begin():
             user = await session.execute(
@@ -155,17 +151,29 @@ async def get_next_account(chat_id):
             user = user.scalar_one_or_none()
 
             if user:
-                # Получаем анкеты с учетом last_uid
+                # Получаем список анкет с учётом last_uid
                 results = await search_accounts(user.isMale, user.friend_sex, user.age, user.chat_id)
 
-                # Фильтруем анкеты, чтобы показывать только те, что еще не были просмотрены
+                # Фильтруем анкеты, которые еще не были просмотрены
                 next_accounts = [acc for acc in results if acc.uid > user.last_uid]
+
                 if next_accounts:
                     next_account = next_accounts[0]
-                    user.last_uid = next_account.uid  # Обновляем last_uid
-                    await session.commit()
+
+                    # Обновляем last_uid только если нужно (например, при успешном показе новой анкеты)
+                    if update_last_uid:
+                        user.last_uid = next_account.uid
+                        await session.commit()
                     return next_account
+                else:
+                    # Если все анкеты просмотрены, сбрасываем last_uid для повторного поиска
+                    if update_last_uid:
+                        user.last_uid = 0  # Сбрасываем last_uid, чтобы начать просмотр заново
+                        await session.commit()
+                    return None
     return None
+
+
 
 
 async def display_account(event: CallbackQuery, account):
@@ -189,11 +197,33 @@ async def display_account(event: CallbackQuery, account):
 
     # Если есть фотография, отправляем ее
     if account.photo:
-        photo_path = os.path.abspath(os.path.join("account_photos", str(account.chat_id), account.photo))
+        photo_path = os.path.abspath(os.path.join(account.photo))
         photo = FSInputFile(photo_path)
         await event.message.answer_photo(photo=photo, caption=profile_text, reply_markup=assessment_menu)
     else:
         await event.message.answer(profile_text, reply_markup=assessment_menu)
+
+
+async def send_like_request(event: CallbackQuery, liked_chat_id: int, user_chat_id: int):
+    """Отправляет запрос на лайк другому пользователю."""
+    markup = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Взаимный лайк", callback_data=f"mutual_like_{user_chat_id}"),
+         InlineKeyboardButton(text="Отказаться", callback_data="reject_like")]
+    ])
+
+    await event.bot.send_message(
+        liked_chat_id,
+        f"Вас лайкнули! Хотите поставить лайк в ответ?",
+        reply_markup=markup
+    )
+
+
+async def send_mutual_like_notification(event: CallbackQuery, chat_id: int, telegram_username: str):
+    """Отправляет уведомление о взаимном лайке."""
+    await event.bot.send_message(
+        chat_id,
+        f"У вас взаимный лайк! Вот tg_id: {telegram_username}"
+    )
 
 
 @router.callback_query(F.data == "menu")
@@ -221,7 +251,6 @@ async def callback_menu(event: Message | CallbackQuery):
             elif isinstance(event, CallbackQuery):
                 await event.message.delete()
                 await event.message.answer(f"{greeting} {html.escape(user.name)}! Добро пожаловать в меню", reply_markup=main_menu)
-
 
 
 @router.callback_query(F.data == "profile")
@@ -265,7 +294,7 @@ async def callback_profile(event: Message | CallbackQuery):
 
                 # Если есть фотография, отправляем ее
                 if user.photo:
-                    photo_path = os.path.abspath(os.path.join("account_photos", str(user.chat_id), user.photo))
+                    photo_path = os.path.abspath(os.path.join(user.photo))
                     photo = FSInputFile(photo_path)
                     await event.message.answer_photo(photo=photo, caption=profile_text)
                 else:
@@ -280,11 +309,6 @@ async def callback_settings(event: Message | CallbackQuery):
     elif isinstance(event, CallbackQuery):
         await event.message.delete()
         await event.message.answer("Настройки:", reply_markup=main_settings)
-
-
-# @router.callback_query(F.data == "rewrite_profile")
-# async def callback_rewrite_profile(call: CallbackQuery, state: FSMContext):
-#     await state_user_rewrite(call, state)
 
 
 @router.callback_query(F.data == "off_profile")
@@ -350,16 +374,31 @@ async def restart_search(callback: CallbackQuery):
         await session.commit()
         await callback.message.edit_text("Поиск начат заново.", reply_markup=assessment_menu)
 
-
 @router.callback_query(F.data == "like")
 async def callback_like(event: CallbackQuery):
     user_chat_id = event.message.chat.id
-    account = await get_next_account(user_chat_id)
+    liked_account = await get_next_account(user_chat_id, update_last_uid=True)  # Обновляем last_uid при лайке
 
-    if account:
-        await display_account(event, account)
+    if liked_account:
+        # Сохраняем лайк в базу данных
+        await save_like(user_chat_id, liked_account.chat_id)
+
+        # Отправляем запрос на взаимный лайк
+        await send_like_request(event, liked_account.chat_id, user_chat_id)
+
+        # После успешного отправления запроса на лайк, отображаем следующую анкету
+        next_account = await get_next_account(user_chat_id, update_last_uid=False)  # Не обновляем last_uid повторно
+        if next_account:
+            await display_account(event, next_account)
+        else:
+            await event.message.delete()
+            await event.message.answer(
+                "Анкеты закончились. Выберите действие:",
+                reply_markup=research
+            )
     else:
-        await event.message.edit_text(
+        await event.message.delete()
+        await event.message.answer(
             "Анкеты закончились. Выберите действие:",
             reply_markup=research
         )
@@ -368,22 +407,49 @@ async def callback_like(event: CallbackQuery):
 @router.callback_query(F.data == "dislike")
 async def callback_dislike(event: CallbackQuery):
     user_chat_id = event.message.chat.id
-    account = await get_next_account(user_chat_id)
+    next_account = await get_next_account(user_chat_id)
 
-    if account:
-        await display_account(event, account)
+    if next_account:
+        await display_account(event, next_account)
     else:
-        await event.message.edit_text(
+        await event.message.delete()
+        await event.message.answer(
             "Анкеты закончились. Выберите действие:",
             reply_markup=research
         )
+
+
+@router.callback_query(F.data.startswith("mutual_like_"))
+async def handle_mutual_like(event: CallbackQuery):
+    user_chat_id = event.message.chat.id
+    liked_chat_id = int(event.data.split("_")[-1])
+
+    async with accounts_db_session() as session:
+        async with session.begin():
+            liked_tg_id = await session.execute(select(AccountsTable).filter_by(chat_id=liked_chat_id))
+            user_tg_id = await session.execute(select(AccountsTable).filter_by(chat_id=user_chat_id))
+            acc = liked_tg_id.scalar_one_or_none()
+            user = user_tg_id.scalar_one_or_none()
+
+    # Отправляем tg_id друг другу при взаимном лайке
+            await send_mutual_like_notification(event, user_chat_id, acc.tg_id)
+            await send_mutual_like_notification(event, liked_chat_id, user.tg_id)
+
+            await event.answer("Взаимный лайк! Вам отправлено tg_id пользователя.")
+
+
+@router.callback_query(F.data == "reject_like")
+async def callback_reject_like(event: CallbackQuery):
+    """Обработчик для отказа от взаимного лайка."""
+    await event.answer("Вы отказались от взаимного лайка.", show_alert=True)
+    await event.message.delete()  # Удаляем сообщение с запросом на взаимный лайк
 
 
 @router.callback_query(F.data == "update_search")
 async def update_search(callback: CallbackQuery):
     async with accounts_db_session() as session:
         user = await session.get(AccountsTable, callback.message.chat.id)
-        accounts = await search_accounts(user)
+        accounts = await search_accounts(user.isMale, user.friend_sex, user.age, user.chat_id)
 
         if accounts:
             next_account = accounts[0]
@@ -418,8 +484,8 @@ async def callback_feedback(event: Message | CallbackQuery):
 
 
 @router.callback_query(F.data == "edit_profile")
-async def callback_edit_profile(call: CallbackQuery, state: FSMContext):
-    pass # открыть меню с изменениями
+async def callback_edit_profile(call: CallbackQuery):
+    pass  # открыть меню с изменениями
 
 
 @router.callback_query(F.data == "feedback_account")
