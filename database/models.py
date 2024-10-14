@@ -29,12 +29,6 @@ class AccountsTable(Base):
     last_uid = Column(Integer, default=0)
 
 
-class LikedAccountsTable(Base):
-    __tablename__ = 'LikedAccounts'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    chat_id = Column(Integer, ForeignKey('Accounts.chat_id'), nullable=False)  # Идентификатор пользователя
-    liked_uid = Column(Integer, ForeignKey('Accounts.uid'), nullable=False)  # Идентификатор лайкнутой анкеты
-
 
 async def create_stat_table(chat_id, engine: AsyncEngine):
     table_name = f"stat_{chat_id}"
@@ -66,3 +60,25 @@ async def create_stat_table(chat_id, engine: AsyncEngine):
         await conn.run_sync(metadata.create_all)
 
     return stat_table
+
+
+async def create_liked_table(chat_id, engine: AsyncEngine):
+    table_name = f"liked_{chat_id}"
+    metadata = MetaData()
+
+    liked_table = Table(
+        table_name,
+        metadata,
+        Column('id', Integer, primary_key=True),
+        Column('chat_id', Integer, nullable=False),
+        Column('liked_account', Integer, nullable=False),
+        extend_existing=True
+    )
+
+    # Используем асинхронный контекст для создания таблицы
+    async with engine.begin() as conn:
+        await conn.run_sync(metadata.create_all)
+
+    return liked_table
+
+

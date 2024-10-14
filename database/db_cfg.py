@@ -1,19 +1,19 @@
 import asyncio
 
-from datetime import datetime
-
 from sqlalchemy.future import select
 from sqlalchemy import Table, MetaData
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_scoped_session, async_sessionmaker
-from .models import Base, AccountsTable, LikedAccountsTable, create_stat_table  # импорт моделей
+from .models import Base, AccountsTable, create_stat_table, create_liked_table  # импорт моделей
 
 # Конфигурация для подключения к базе данных
 DATABASE_URL_ACCOUNTS = "sqlite+aiosqlite:///./database/accounts.db"
 DATABASE_URL_STATISTIC = "sqlite+aiosqlite:///./database/statistic.db"
+DATABASE_URL_LIKE = "sqlite+aiosqlite:///./database/liked_accounts.db"
 
 # Создание асинхронного движка
 engine_accounts: AsyncEngine = create_async_engine(DATABASE_URL_ACCOUNTS, echo=True)
 engine_statistic: AsyncEngine = create_async_engine(DATABASE_URL_STATISTIC, echo=True)
+engine_like: AsyncEngine = create_async_engine(DATABASE_URL_LIKE, echo=True)
 
 
 def get_current_task():
@@ -41,18 +41,18 @@ statistics_db_session = async_scoped_session(
     scopefunc=get_current_task
 )
 
+liked_db_session = async_scoped_session(
+    async_sessionmaker
+        (
+        engine_like,
+        expire_on_commit=False,
+        class_=AsyncSession
+    ),
+    scopefunc=get_current_task
+)
 
-# Базовый класс для моделей
-# Функция для автоматического создания таблиц
-async def init_db():
-    async with engine_accounts.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all, tables=[AccountsTable.__table__, LikedAccountsTable.__table__])
 
-    # async with engine_statistic.begin() as conn:
-    #     await conn.run_sync(Base.metadata.create_all, tables=[StatTable.__table__])
-
-
-async def transfer_data(chat_id, accounts_session, statistics_session):
+async def transfer_data(chat_id, accounts_session, statistics_session, liked_session):
     # Извлекаем данные пользователя из таблицы AccountsTable
     async with accounts_session() as session:
         result = await session.execute(
@@ -63,6 +63,7 @@ async def transfer_data(chat_id, accounts_session, statistics_session):
     if account:
         # Создаем таблицу для статистики с именем stat_{chat_id}
         await create_stat_table(chat_id, engine_statistic)
+        await create_liked_table(chat_id, engine_like)
 
         # Открываем соединение с асинхронным движком
         async with engine_statistic.begin() as conn:
@@ -88,7 +89,7 @@ async def transfer_data(chat_id, accounts_session, statistics_session):
             await statistics_session.commit()
 
 
-async def transfer_all_accounts_data(accounts_session, statistics_session):
+async def transfer_all_accounts_data(accounts_session, statistics_session, liked_session):
     async with accounts_session() as session:
         # Получаем всех пользователей из AccountsTable
         result = await session.execute(select(AccountsTable))
@@ -96,9 +97,19 @@ async def transfer_all_accounts_data(accounts_session, statistics_session):
 
     # Для каждого пользователя создаем таблицу и переносим данные
     for account in accounts:
-        await transfer_data(account.chat_id, accounts_session, statistics_session)
+        await transfer_data(account.chat_id, accounts_session, statistics_session, liked_session)
+
+
+# Базовый класс для моделей
+# Функция для автоматического создания таблиц
+async def init_db():
+    async with engine_accounts.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all, tables=[AccountsTable.__table__])
+
+    # async with engine_statistic.begin() as conn:
+    #     await conn.run_sync(Base.metadata.create_all, tables=[StatTable.__table__])
 
 
 def create_db():
     asyncio.run(init_db())
-    asyncio.run(transfer_all_accounts_data(accounts_db_session, statistics_db_session))
+    asyncio.run(transfer_all_accounts_data(accounts_db_session, statistics_db_session, liked_db_session))

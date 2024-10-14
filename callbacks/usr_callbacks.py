@@ -1,23 +1,24 @@
-import os
 import html
+import os
 
 from datetime import datetime
 
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, FSInputFile
+from aiogram.types import Message, CallbackQuery, FSInputFile, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import or_, and_
 
-from keyboards.inline_keyboards import main_menu, main_settings, assessment_menu, research
-from keyboards.default_keyboards import confirmation
+from keyboards.inline_keyboards import main_menu, main_settings, assessment_menu, research, feedback_url
+from keyboards.default_keyboards import confirmation, user_course_bac, user_sex
 
 from states import rewrite_state
 
 from database.db_cfg import accounts_db_session
-from database.models import AccountsTable, LikedAccountsTable
+from database.models import AccountsTable
+from states.rewrite_state import state_user_rewrite
 
 router = Router()
 
@@ -147,27 +148,23 @@ async def search_accounts(user_is_male: bool, user_preference: str, user_age: in
 
 async def get_next_account(chat_id):
     async with accounts_db_session() as session:
-        user = await session.execute(
-            select(AccountsTable).filter_by(chat_id=chat_id)
-        )
-        user = user.scalar_one_or_none()
-
-        if user:
-            # Получаем анкеты, исключая те, на которые пользователь нажал "like"
-            liked_accounts = await session.execute(
-                select(LikedAccountsTable).filter_by(chat_id=chat_id)
+        async with session.begin():
+            user = await session.execute(
+                select(AccountsTable).filter_by(chat_id=chat_id)
             )
-            liked_uids = [acc.uid for acc in liked_accounts.scalars().all()]
+            user = user.scalar_one_or_none()
 
-            results = await search_accounts(user.isMale, user.friend_sex, user.age, user.chat_id)
+            if user:
+                # Получаем анкеты с учетом last_uid
+                results = await search_accounts(user.isMale, user.friend_sex, user.age, user.chat_id)
 
-            # Фильтруем анкеты, исключая те, которые пользователь лайкнул
-            next_accounts = [acc for acc in results if acc.uid > user.last_uid and acc.uid not in liked_uids]
-            if next_accounts:
-                next_account = next_accounts[0]
-                user.last_uid = next_account.uid  # Обновляем last_uid
-                await session.commit()  # Коммитим изменения last_uid
-                return next_account
+                # Фильтруем анкеты, чтобы показывать только те, что еще не были просмотрены
+                next_accounts = [acc for acc in results if acc.uid > user.last_uid]
+                if next_accounts:
+                    next_account = next_accounts[0]
+                    user.last_uid = next_account.uid  # Обновляем last_uid
+                    await session.commit()
+                    return next_account
     return None
 
 
@@ -175,6 +172,7 @@ async def display_account(event: CallbackQuery, account):
     gender = "Парень" if account.isMale else "Девушка"
     degree = "Бакалавриат" if account.isBaccalaureate else "Магистратура"
 
+    # Формируем текст профиля
     profile_text = (
         f"Имя - {html.escape(account.name)}\n"
         f"Возраст - {account.age}\n"
@@ -184,21 +182,18 @@ async def display_account(event: CallbackQuery, account):
         f"Курс - {account.course}\n"
     )
     if account.about:
-        profile_text += f"О тебе - {account.about}\n"
+        profile_text += f"О себе - {account.about}\n"
 
+    # Удаляем предыдущее сообщение
+    await event.message.delete()
+
+    # Если есть фотография, отправляем ее
     if account.photo:
         photo_path = os.path.abspath(os.path.join("account_photos", str(account.chat_id), account.photo))
         photo = FSInputFile(photo_path)
         await event.message.answer_photo(photo=photo, caption=profile_text, reply_markup=assessment_menu)
     else:
         await event.message.answer(profile_text, reply_markup=assessment_menu)
-
-
-async def add_liked_account(chat_id, liked_uid):
-    async with accounts_db_session() as session:
-        liked_entry = LikedAccountsTable(chat_id=chat_id, liked_uid=liked_uid)
-        session.add(liked_entry)
-        await session.commit()
 
 
 @router.callback_query(F.data == "menu")
@@ -226,53 +221,56 @@ async def callback_menu(event: Message | CallbackQuery):
             elif isinstance(event, CallbackQuery):
                 await event.message.delete()
                 await event.message.answer(f"{greeting} {html.escape(user.name)}! Добро пожаловать в меню", reply_markup=main_menu)
-            await session.close()
+
 
 
 @router.callback_query(F.data == "profile")
 async def callback_profile(event: Message | CallbackQuery):
-    async with accounts_db_session() as session:
-        async with session.begin():
+    async with accounts_db_session() as session:  # Use async context manager
+        async with session.begin():  # Optional: use a transaction
+            # Use the asynchronous query method
             user_result = await session.execute(
                 select(AccountsTable).filter_by(chat_id=event.message.chat.id)
             )
             user = user_result.scalar_one_or_none()
 
-            gender = "Парень" if user.isMale else "Девушка"
-            degree = "Бакалавриат" if user.isBaccalaureate else "Магистратура"
-            friend_sex = {
-                "males": "Парней",
-                "females": "Девушек",
-                "dont_care": "И парней и девушек"
-            }.get(user.friend_sex, "Не указано")
-
-            profile_text = (
-                f"Ваш профиль:\n"
-                f"Имя - {html.escape(user.name)}\n"
-                f"Возраст - {user.age}\n"
-                f"Пол - {gender}\n"
-                f"Факультет - {user.faculty}\n"
-                f"Степень - {degree}\n"
-                f"Курс - {user.course}\n"
-            )
-
-            if user.about:
-                profile_text += f"О тебе - {user.about}\n"
-
-            profile_text += f"Ты ищешь - {friend_sex}"
-
             if isinstance(event, CallbackQuery):
+                gender = "Парень" if user.isMale else "Девушка"
+                degree = "Бакалавриат" if user.isBaccalaureate else "Магистратура"
+
+                if user.friend_sex == "males":
+                    sex_preference = "Мужчин"
+                elif user.friend_sex == "females":
+                    sex_preference = "Девушек"
+                elif user.friend_sex == "dont_care":
+                    sex_preference = "И девушек и мужчин"
+                else:
+                    sex_preference = "Не указано"
+
+                # Формируем текст профиля
+                profile_text = (
+                    f"Имя - {html.escape(user.name)}\n"
+                    f"Возраст - {user.age}\n"
+                    f"Пол - {gender}\n"
+                    f"Факультет - {user.faculty}\n"
+                    f"Степень - {degree}\n"
+                    f"Курс - {user.course}\n"
+                    f"Ты ищешь - {sex_preference}\n"
+                )
+                if user.about:
+                    profile_text += f"О тебе - {user.about}\n"
+
+                # Удаляем предыдущее сообщение
+                await event.message.delete()
+
+                # Если есть фотография, отправляем ее
                 if user.photo:
-                    # Загружаем фото как InputFile
                     photo_path = os.path.abspath(os.path.join("account_photos", str(user.chat_id), user.photo))
                     photo = FSInputFile(photo_path)
-                    await event.message.answer_photo(
-                        photo=photo,
-                        caption=profile_text
-                    )
+                    await event.message.answer_photo(photo=photo, caption=profile_text)
                 else:
                     await event.message.answer(profile_text)
-            await session.close()
+                await session.close()
 
 
 @router.callback_query(F.data == "settings")
@@ -284,9 +282,9 @@ async def callback_settings(event: Message | CallbackQuery):
         await event.message.answer("Настройки:", reply_markup=main_settings)
 
 
-@router.callback_query(F.data == "rewrite_profile")
-async def callback_rewrite_profile(call: CallbackQuery, state: FSMContext):
-    await rewrite_state.user_rewrite(call, state)
+# @router.callback_query(F.data == "rewrite_profile")
+# async def callback_rewrite_profile(call: CallbackQuery, state: FSMContext):
+#     await state_user_rewrite(call, state)
 
 
 @router.callback_query(F.data == "off_profile")
@@ -323,100 +321,110 @@ async def callback_delete_account(event: Message | CallbackQuery):
 @router.callback_query(F.data == "start_search")
 async def callback_find_people(event: CallbackQuery):
     async with accounts_db_session() as session:
-        user = await session.execute(
-            select(AccountsTable).filter_by(chat_id=event.message.chat.id)
-        )
-        user = user.scalar_one_or_none()
+        async with session.begin():
+            user = await session.execute(
+                select(AccountsTable).filter_by(chat_id=event.message.chat.id)
+            )
+            user = user.scalar_one_or_none()
 
-        if user:
-            # Получаем следующую анкету с last_uid
-            next_account = await get_next_account(user.chat_id)
+            if user:
+                results = await search_accounts(user.isMale, user.friend_sex, user.age, user.chat_id)
+                print(results)
+                print(f"Найдено {len(results)} анкет:")
 
-            if next_account:
-                await display_account(event, next_account)  # Отправляем новую анкету
-            else:
-                await event.message.answer(
-                    "Анкеты закончились. Выберите действие:",
-                    reply_markup=research  # Используем клавиатуру research
-                )
+                for account in results:
+                    print(account.name, account.age, account.isMale, account.friend_sex)
+
+                if results:
+                    first_account = results[0]  # Берем первую анкету
+                    await display_account(event, first_account)  # Отправляем анкету с фото или текстом
+                else:
+                    await event.message.edit_text("Анкеты не найдены.")
+
+
+@router.callback_query(F.data == "restart_search")
+async def restart_search(callback: CallbackQuery):
+    async with accounts_db_session() as session:
+        user = await session.get(AccountsTable, callback.message.chat.id)
+        user.last_uid = 0  # Сбрасываем last_uid
+        await session.commit()
+        await callback.message.edit_text("Поиск начат заново.", reply_markup=assessment_menu)
 
 
 @router.callback_query(F.data == "like")
 async def callback_like(event: CallbackQuery):
     user_chat_id = event.message.chat.id
-
-    # Получаем следующую анкету
     account = await get_next_account(user_chat_id)
 
     if account:
         await display_account(event, account)
     else:
-        await event.message.delete()  # Удаляем предыдущее сообщение
-        await event.message.answer(
+        await event.message.edit_text(
             "Анкеты закончились. Выберите действие:",
-            reply_markup=research  # Используем клавиатуру research
+            reply_markup=research
         )
 
 
 @router.callback_query(F.data == "dislike")
 async def callback_dislike(event: CallbackQuery):
     user_chat_id = event.message.chat.id
-
-    # Получаем следующую анкету
     account = await get_next_account(user_chat_id)
 
     if account:
         await display_account(event, account)
     else:
-        await event.message.delete()  # Удаляем предыдущее сообщение
-        await event.message.answer(
+        await event.message.edit_text(
             "Анкеты закончились. Выберите действие:",
-            reply_markup=research  # Используем клавиатуру research
+            reply_markup=research
         )
-
-
-@router.callback_query(F.data == "restart_search")
-async def restart_search(event: CallbackQuery):
-    user_chat_id = event.message.chat.id
-
-    async with accounts_db_session() as session:
-        user = await session.execute(
-            select(AccountsTable).filter_by(chat_id=user_chat_id)
-        )
-        user = user.scalar_one_or_none()
-
-        if user:
-            user.last_uid = 0  # Сбрасываем last_uid для начала нового поиска
-            await session.commit()
-
-    account = await get_next_account(user_chat_id)
-    if account:
-        await event.message.delete()  # Удаляем предыдущее сообщение
-        await display_account(event, account)
-    else:
-        await event.message.delete()  # Удаляем предыдущее сообщение
-        await event.message.answer("Анкеты не найдены.")
 
 
 @router.callback_query(F.data == "update_search")
-async def update_search(event: CallbackQuery):
-    user_chat_id = event.message.chat.id
-    account = await get_next_account(user_chat_id)
+async def update_search(callback: CallbackQuery):
+    async with accounts_db_session() as session:
+        user = await session.get(AccountsTable, callback.message.chat.id)
+        accounts = await search_accounts(user)
 
-    if account:
-        await event.message.delete()  # Удаляем предыдущее сообщение
-        await display_account(event, account)
-    else:
-        await event.message.delete()  # Удаляем предыдущее сообщение
-        await event.message.answer(
-            "Новых анкет нет. Выберите действие:",
-            reply_markup=research  # Используем клавиатуру для предложений действий
-        )
+        if accounts:
+            next_account = accounts[0]
+            user.last_uid = next_account.id
+            await session.commit()
+
+            gender = "Парень" if next_account.isMale else "Девушка"
+            degree = "Бакалавриат" if next_account.isBaccalaureate else "Магистратура"
+            profile_text = (
+                f"Имя - {html.escape(next_account.name)}\n"
+                f"Возраст - {next_account.age}\n"
+                f"Пол - {gender}\n"
+                f"Факультет - {next_account.faculty}\n"
+                f"Степень - {degree}\n"
+                f"Курс - {next_account.course}\n"
+            )
+            if next_account.about:
+                profile_text += f"О тебе - {next_account.about}\n"
+
+            await callback.message.edit_text(profile_text, reply_markup=assessment_menu)
+        else:
+            await callback.message.edit_text(
+                "Новых анкет нет. Хотите начать поиск заново?",
+                reply_markup=research
+            )
 
 
 @router.callback_query(F.data == "feedback")
 async def callback_feedback(event: Message | CallbackQuery):
-    pass
+    if isinstance(event, CallbackQuery):
+        await event.message.answer("Вы можете связаться с нашим разработчиком лично, бла бла бла", reply_markup=feedback_url)
+
+
+@router.callback_query(F.data == "edit_profile")
+async def callback_edit_profile(call: CallbackQuery, state: FSMContext):
+    pass # открыть меню с изменениями
+
+
+@router.callback_query(F.data == "feedback_account")
+async def callback_send_feedback(call: CallbackQuery):
+    pass  # сделать тут лог
 
 
 @router.callback_query(F.data == "edit_profile")

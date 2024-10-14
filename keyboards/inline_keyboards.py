@@ -5,7 +5,7 @@ first_registration_keyboard = InlineKeyboardMarkup(row_width=1,
                                                        [InlineKeyboardButton(text='Регистрация', callback_data='first_reg')]
                                                    ])
 
-main_menu = InlineKeyboardMarkup(row_width=3,
+main_menu = InlineKeyboardMarkup(row_width=2,
                                  inline_keyboard=[
                                      [
                                          InlineKeyboardButton(text='Искать людей!', callback_data='start_search'),
@@ -31,6 +31,13 @@ main_settings = InlineKeyboardMarkup(row_width=3,
                                          ]
                                      ])
 
+feedback_url = InlineKeyboardMarkup(row_width=1,
+                                    inline_keyboard=[
+                                        [
+                                            InlineKeyboardButton(text="Связаться с разработчиком", url="https://t.me/qqqqqqqqqpqpws", callback_data="feedback_account")
+                                        ]
+                                    ])
+
 edit_profile = InlineKeyboardMarkup(row_width=3,
                                     inline_keyboard=[
                                         [
@@ -49,7 +56,6 @@ edit_profile = InlineKeyboardMarkup(row_width=3,
                                             InlineKeyboardButton(text='Пол друга', callback_data='edit_friend_sex')
                                         ]
                                     ])
-
 assessment_menu = InlineKeyboardMarkup(row_width=2,
                                        inline_keyboard=[
                                            [
