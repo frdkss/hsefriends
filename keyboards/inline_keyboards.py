@@ -2,19 +2,23 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 first_registration_keyboard = InlineKeyboardMarkup(row_width=1,
                                                    inline_keyboard=[
-                                                       [InlineKeyboardButton(text='Регистрация', callback_data='first_reg')]
+                                                       [InlineKeyboardButton(text='Начать регистрацию', callback_data='first_reg')],
+                                                       [
+                                                           InlineKeyboardButton(text='', callback_data='license_agr'),
+                                                           InlineKeyboardButton(text='', callback_data='policy_agr')
+                                                       ]
                                                    ])
 
 main_menu = InlineKeyboardMarkup(row_width=2,
                                  inline_keyboard=[
                                      [
-                                         InlineKeyboardButton(text='Искать людей!', callback_data='start_search'),
+                                         InlineKeyboardButton(text='Искать друзей!', callback_data='start_search'),
                                          InlineKeyboardButton(text='Мой профиль', callback_data='profile'),
                                          InlineKeyboardButton(text='Настройки', callback_data='settings')
-                                     ],
-                                     [
-                                         InlineKeyboardButton(text='Помощь', callback_data='help')
-                                     ]
+                                     ]#,
+                                     # [
+                                     #     InlineKeyboardButton(text='Помощь', callback_data='help')
+                                     # ]
                                  ])
 
 # main_settings = InlineKeyboardMarkup(row_width=3,
@@ -82,8 +86,8 @@ edit_profile = InlineKeyboardMarkup(row_width=3,
 assessment_menu = InlineKeyboardMarkup(row_width=2,
                                        inline_keyboard=[
                                            [
-                                               InlineKeyboardButton(text='❤️', callback_data='like'),
-                                               InlineKeyboardButton(text='💔', callback_data='dislike'),
+                                               InlineKeyboardButton(text='👍', callback_data='like'),
+                                               InlineKeyboardButton(text='👎', callback_data='dislike'),
                                            ],
                                            [
                                                InlineKeyboardButton(text='В меню', callback_data='menu')

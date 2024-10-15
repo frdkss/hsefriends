@@ -24,16 +24,14 @@ async def command_start(message: Message):
     usr_first_name = html.escape(message.from_user.first_name)
     usr_last_name = html.escape(message.from_user.last_name) if message.from_user.last_name else None
     if usr_last_name is None:
-        await message.answer(f"Привет <b><a href=\"t.me/{message.from_user.username}\">"
-                             f"{usr_first_name}</a></b>! "
-                             f"Давай начнем регистрацию твоего аккаунта в HSE Friends",
+        await message.answer(f"Добро пожаловать в HSE Friends!, <b><a href=\"t.me/{message.from_user.username}\">"
+                             f"{usr_first_name}</a></b>! ",
                              disable_web_page_preview=True,
                              reply_markup=first_registration_keyboard)
         command_logger.info(f"user: {message.from_user.username}, haven't last name")
     else:
-        await message.answer(f"Привет <b><a href=\"t.me/{message.from_user.username}\">"
-                             f"{usr_first_name} {usr_last_name}</a></b>! "
-                             f"Давай начнем регистрацию твоего аккаунта в HSE Friends",
+        await message.answer(f"Добро пожаловать в HSE Friends!, <b><a href=\"t.me/{message.from_user.username}\">"
+                             f"{usr_first_name} {usr_last_name}</a></b>!",
                              disable_web_page_preview=True,
                              reply_markup=first_registration_keyboard)
         command_logger.info(f"user: {message.from_user.username}, have last name")
@@ -134,4 +132,3 @@ async def command_edit_friend_sex(message: Message):
 #                     print(ewq.account_id)
 #                 else:
 #                     print("None")
-
