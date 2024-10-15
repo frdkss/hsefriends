@@ -37,7 +37,7 @@ async def user_first_reg(event: Message | CallbackQuery, state: FSMContext):
         await state.set_state(FirstRegistration.name)
 
 #         await state.update_data(isActive = True)
-        await event.answer("Давай начнем, если ты хочешь отменить, напиши \"/cancel\"! Напиши свое имя которое будет отображаться в профиле.")
+        await event.answer("Давай начнем! Если ты хочешь отменить регистрацию, напиши \"/cancel\"! Напиши имя, которое будет отображаться в профиле.")
     elif isinstance(event, CallbackQuery):
         await event.message.delete()
         inline_kb_logger.info('start reg')
@@ -50,7 +50,7 @@ async def user_first_reg(event: Message | CallbackQuery, state: FSMContext):
         await state.set_state(FirstRegistration.name)
 
         await state.update_data(chat_id=user_chat_id)
-        await event.message.answer("Давай начнем! Напиши свое имя которое будет отображаться в профиле.")
+        await event.message.answer("Давай начнем! Если ты хочешь отменить регистрацию, напиши \"/cancel\"! Напиши имя, которое будет отображаться в профиле.")
     # async with statistic_db_session() as session:
     #     async with session.begin():
     #         statistic_table = StatTable(
@@ -76,7 +76,7 @@ async def user_name_inf(message: Message, state: FSMContext):
 @router.message(FirstRegistration.age)
 async def user_age_inf(message: Message, state: FSMContext):
     await state.update_data(age=int(message.text))
-    await message.answer("Какой у тебя пол?", reply_markup=user_sex)
+    await message.answer("Теперь определимся с полом?", reply_markup=user_sex)
     await state.set_state(FirstRegistration.isMale)
 
 
@@ -86,7 +86,7 @@ async def user_sex_inf(message: Message, state: FSMContext):
         await state.update_data(isMale=True)
     elif message.text == "Женский":
         await state.update_data(isMale=False)
-    await message.answer("Отлично! Теперь скажи, на каком факультете ты учишься?", reply_markup=ReplyKeyboardRemove())
+    await message.answer("Отлично! На какой программе ты учишься?", reply_markup=ReplyKeyboardRemove())
     await state.set_state(FirstRegistration.faculty)
 
 
