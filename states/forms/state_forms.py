@@ -32,6 +32,14 @@ class RewriteProfile(StatesGroup):
     friend_sex = State()
 
 
+class NewMessageState(StatesGroup):
+    waiting_for_new_message = State()
+
+
+class NewPhotoState(StatesGroup):
+    waiting_for_new_photo = State()
+
+
 class MenuState:
     MAIN = "main_menu"
     SETTINGS = "main_settings"

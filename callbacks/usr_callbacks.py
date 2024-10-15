@@ -4,15 +4,16 @@ import os
 from datetime import datetime
 
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy.future import select
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, text
 
-from keyboards.inline_keyboards import main_menu, main_settings, assessment_menu, research, feedback_url
+from keyboards.inline_keyboards import main_menu, main_settings, assessment_menu, research, feedback_url, back_to_main, edit_profile
 from keyboards.default_keyboards import confirmation
 
-from database.db_cfg import accounts_db_session, save_like
+from database.db_cfg import accounts_db_session, save_like, liked_db_session
 from database.models import AccountsTable
 
 router = Router()
@@ -170,7 +171,7 @@ async def get_next_account(chat_id, update_last_uid=True):
                         user.last_uid = 0  # Сбрасываем last_uid, чтобы начать просмотр заново
                         await session.commit()
                     return None
-                await session.close()
+            await session.close()
     return None
 
 
@@ -202,40 +203,102 @@ async def display_account(event: CallbackQuery, account):
         await event.message.answer(profile_text, reply_markup=assessment_menu)
 
 
-async def send_like_request(event: CallbackQuery, liked_chat_id: int, user_chat_id: int):
-    """Отправляет запрос на лайк другому пользователю."""
+async def send_profile(event: CallbackQuery, chat_id: int, account):
+    """Отправляет анкету пользователя."""
+    gender = "Парень" if account.isMale else "Девушка"
+    degree = "Бакалавриат" if account.isBaccalaureate else "Магистратура"
 
-    like_request = InlineKeyboardMarkup(row_width=2,
-                                        inline_keyboard=[
-                                            [
-                                                InlineKeyboardButton(text="Взаимный лайк", callback_data=f"mutual_like_{user_chat_id}"),
-                                                InlineKeyboardButton(text="Отказаться", callback_data="reject_like")
-                                            ],
-                                            [
-                                                InlineKeyboardButton(text="В меню", callback_data="menu")
-                                            ]
-    ])
+    profile_text = (
+        f"Имя - {html.escape(account.name)}\n"
+        f"Возраст - {account.age}\n"
+        f"Пол - {gender}\n"
+        f"Факультет - {account.faculty}\n"
+        f"Степень - {degree}\n"
+        f"Курс - {account.course}\n"
+    )
+    if account.about:
+        profile_text += f"О себе - {account.about}\n"
+
+    # Отправляем анкету с фото или без него
+    if account.photo:
+        photo_path = os.path.abspath(account.photo)
+        photo = FSInputFile(photo_path)
+        await event.bot.send_photo(chat_id, photo=photo, caption=profile_text)
+    else:
+        await event.bot.send_message(chat_id, profile_text)
+
+
+async def send_like_request(event: CallbackQuery, liked_chat_id: int, user_chat_id: int):
+    """Отправляет запрос на лайк другому пользователю и показывает его анкету."""
+
     async with accounts_db_session() as session:
-        async with session.begin():
-            await event.bot.send_message(
-                liked_chat_id,
-                f"Вас лайкнули!\n"
-                f" \n"
-                f"Хотите поставить лайк в ответ?",
-                reply_markup=like_request
-            )
-            await session.close()
+        result = await session.execute(select(AccountsTable).where(AccountsTable.chat_id == user_chat_id))
+        user_account = result.scalars().first()
+
+        if not user_account:
+            await event.bot.send_message(liked_chat_id, "Ошибка: пользователь не найден.")
+            return
+
+        # Формируем текст анкеты
+        gender = "Парень" if user_account.isMale else "Девушка"
+        degree = "Бакалавриат" if user_account.isBaccalaureate else "Магистратура"
+
+        profile_text = (
+            f"Имя - {html.escape(user_account.name)}\n"
+            f"Возраст - {user_account.age}\n"
+            f"Пол - {gender}\n"
+            f"Факультет - {user_account.faculty}\n"
+            f"Степень - {degree}\n"
+            f"Курс - {user_account.course}\n"
+        )
+        if user_account.about:
+            profile_text += f"О себе - {user_account.about}\n"
+
+        # Отправляем анкету с фото или без него
+        if user_account.photo:
+            photo_path = os.path.abspath(user_account.photo)
+            photo = FSInputFile(photo_path)
+            await event.bot.send_photo(liked_chat_id, photo=photo, caption=profile_text)
+        else:
+            await event.bot.send_message(liked_chat_id, profile_text)
+
+        # Отправляем запрос на лайк
+        like_request = InlineKeyboardMarkup(row_width=2, inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Взаимный лайк", callback_data=f"mutual_like_{user_chat_id}"),
+                InlineKeyboardButton(text="Отказаться", callback_data="reject_like")
+            ],
+            [
+                InlineKeyboardButton(text="В меню", callback_data="menu")
+            ]
+        ])
+        await event.bot.send_message(
+            liked_chat_id,
+            "Хотите поставить лайк в ответ?",
+            reply_markup=like_request
+        )
 
 
 async def send_mutual_like_notification(event: CallbackQuery, chat_id: int, telegram_username: str):
     """Отправляет уведомление о взаимном лайке."""
-    async with accounts_db_session() as session:
-        async with session.begin():
-            await event.bot.send_message(
-                chat_id,
-                f"У вас взаимный лайк! @{telegram_username}"
-            )
-            await session.close()
+    await event.bot.send_message(
+        chat_id,
+        f"У вас взаимный лайк! @{telegram_username}"
+    )
+
+
+async def delete_user_data(user_id: int):
+    """Функция для удаления данных пользователя из базы."""
+    async with accounts_db_session() as session:  # Используем вашу сессию
+        await remove_user_from_db(session, user_id)
+
+
+async def remove_user_from_db(session: AsyncSession, user_id: int):
+    """Удаление пользователя из базы данных."""
+    await session.execute(
+        AccountsTable.__table__.delete().where(AccountsTable.chat_id == user_id)
+    )
+    await session.commit()
 
 
 @router.callback_query(F.data == "menu")
@@ -309,9 +372,9 @@ async def callback_profile(event: Message | CallbackQuery):
                 if user.photo:
                     photo_path = os.path.abspath(os.path.join(user.photo))
                     photo = FSInputFile(photo_path)
-                    await event.message.answer_photo(photo=photo, caption=profile_text)
+                    await event.message.answer_photo(photo=photo, caption=profile_text, reply_markup=back_to_main)
                 else:
-                    await event.message.answer(profile_text)
+                    await event.message.answer(profile_text, reply_markup=back_to_main)
                 await session.close()
 
 
@@ -324,40 +387,23 @@ async def callback_settings(event: Message | CallbackQuery):
         await event.message.answer("Настройки:", reply_markup=main_settings)
 
 
-@router.callback_query(F.data == "off_profile")
-async def callback_disconnect_account(event: Message | CallbackQuery):
-    # if isinstance(event, Message):
-    #     await event.answer("Вы уверенны?", reply_markup=confirmation)
-    # elif isinstance(event, CallbackQuery):
-    #     await event.message.delete()
-    #     await event.message.answer("Вы уверенны?", reply_markup=confirmation)
-    #
-    # @router.message(F.text.in_(["Да", "Нет"]))
-    # async def handle_confirmation(message: Message):
-    #     if message.text.lower() == "да":
-    #         pass
-    #     elif message.text.lower() == "нет":
-    #         await callback_settings(message)
-
-    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
-    await callback_menu(event)
-
-
 @router.callback_query(F.data == "delete_profile")
 async def callback_delete_account(event: Message | CallbackQuery):
-    # if isinstance(event, Message):
-    #     await event.answer("Вы уверенны?", reply_markup=confirmation)
-    # elif isinstance(event, CallbackQuery):
-    #     await event.message.answer("Вы уверенны?", reply_markup=confirmation)
-    #
-    # @router.message(F.text.in_(["Да", "Нет"]))
-    # async def handle_confirmation(message: Message):
-    #     if message.text.lower() == "да":
-    #         pass
-    #     elif message.text.lower() == "нет":
-    #         await callback_settings(message)
-    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
-    await callback_menu(event)
+    if isinstance(event, Message):
+        await event.answer("Вы уверенны?", reply_markup=confirmation)
+    elif isinstance(event, CallbackQuery):
+        await event.message.answer("Вы уверенны?", reply_markup=confirmation)
+
+    @router.message(F.text.in_(["Да", "Нет"]))
+    async def handle_confirmation(message: Message):
+        if message.text.lower() == "да":
+            await delete_user_data(message.from_user.id)
+            await message.answer(
+                "Ваш профиль удалён. Для продолжения используйте /start.",
+                reply_markup=ReplyKeyboardRemove()
+            )
+        elif message.text.lower() == "нет":
+            await callback_settings(message)
 
 
 @router.callback_query(F.data == "start_search")
@@ -383,15 +429,6 @@ async def callback_find_people(event: CallbackQuery):
                 else:
                     await event.message.edit_text("Анкеты не найдены.")
                 await session.close()
-
-
-@router.callback_query(F.data == "restart_search")
-async def restart_search(callback: CallbackQuery):
-    async with accounts_db_session() as session:
-        user = await session.get(AccountsTable, callback.message.chat.id)
-        user.last_uid = 0  # Сбрасываем last_uid
-        await session.commit()
-        await callback.message.edit_text("Поиск начат заново.", reply_markup=assessment_menu)
 
 
 @router.callback_query(F.data == "like")
@@ -446,16 +483,25 @@ async def handle_mutual_like(event: CallbackQuery):
 
     async with accounts_db_session() as session:
         async with session.begin():
+            # Получаем данные анкет обоих пользователей
             liked_tg_id = await session.execute(select(AccountsTable).filter_by(chat_id=liked_chat_id))
             user_tg_id = await session.execute(select(AccountsTable).filter_by(chat_id=user_chat_id))
             acc = liked_tg_id.scalar_one_or_none()
             user = user_tg_id.scalar_one_or_none()
 
-            # Отправляем tg_id друг другу при взаимном лайке
+            if not acc or not user:
+                await event.answer("Ошибка: один из пользователей не найден.")
+                return
+
+            # Отправляем анкеты пользователям
+            await send_profile(event, user_chat_id, acc)
+            await send_profile(event, liked_chat_id, user)
+
+            # Отправляем уведомления о взаимном лайке
             await send_mutual_like_notification(event, user_chat_id, acc.tg_id)
             await send_mutual_like_notification(event, liked_chat_id, user.tg_id)
 
-            await event.answer("Взаимный лайк! Вам отправлено tg_id пользователя.")
+            await event.answer("Взаимный лайк! Вам отправлены анкеты пользователей.")
             await session.close()
 
 
@@ -466,36 +512,19 @@ async def callback_reject_like(event: CallbackQuery):
     await event.message.delete()  # Удаляем сообщение с запросом на взаимный лайк
 
 
-@router.callback_query(F.data == "update_search")
-async def update_search(callback: CallbackQuery):
-    async with accounts_db_session() as session:
-        user = await session.get(AccountsTable, callback.message.chat.id)
-        accounts = await search_accounts(user.isMale, user.friend_sex, user.age, user.chat_id)
+@router.callback_query(F.data == "restart_search")
+async def restart_search(callback: CallbackQuery):
+    table_name = f"liked_{callback.message.chat.id}"  # Определяем название таблицы
+    async with liked_db_session() as session:
+        # Удаляем таблицу для сброса лайков
+        await session.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+        await session.commit()
 
-        if accounts:
-            next_account = accounts[0]
-            user.last_uid = next_account.id
-            await session.commit()
+    # Уведомляем пользователя о начале нового поиска
+    await callback.message.edit_text("Поиск начат заново.", reply_markup=assessment_menu)
 
-            gender = "Парень" if next_account.isMale else "Девушка"
-            degree = "Бакалавриат" if next_account.isBaccalaureate else "Магистратура"
-            profile_text = (
-                f"Имя - {html.escape(next_account.name)}\n"
-                f"Возраст - {next_account.age}\n"
-                f"Пол - {gender}\n"
-                f"Факультет - {next_account.faculty}\n"
-                f"Степень - {degree}\n"
-                f"Курс - {next_account.course}\n"
-            )
-            if next_account.about:
-                profile_text += f"О тебе - {next_account.about}\n"
-
-            await callback.message.edit_text(profile_text, reply_markup=assessment_menu)
-        else:
-            await callback.message.edit_text(
-                "Новых анкет нет. Хотите начать поиск заново?",
-                reply_markup=research
-            )
+    # Запускаем новый поиск
+    await callback_find_people(callback)
 
 
 @router.callback_query(F.data == "feedback")
@@ -504,72 +533,13 @@ async def callback_feedback(event: Message | CallbackQuery):
         await event.message.answer("Вы можете связаться с нашим разработчиком лично, бла бла бла", reply_markup=feedback_url)
 
 
-@router.callback_query(F.data == "edit_profile")
-async def callback_edit_profile(event: Message | CallbackQuery):
-    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
-    await callback_menu(event)  # открыть меню с изменениями
-
-
 @router.callback_query(F.data == "feedback_account")
 async def callback_send_feedback(call: CallbackQuery):
-    pass # сделать тут лог
+    pass  # сделать тут лог
 
 
 @router.callback_query(F.data == "edit_profile")
 async def callback_edit_profile(event: Message | CallbackQuery):
-    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
-    await callback_menu(event)
+    await event.message.answer("Выберете что мы будем изменять:", reply_markup=edit_profile) if isinstance(event, CallbackQuery) else event.answer(
+        "Выберете что мы будем изменять:", reply_markup=edit_profile)
 
-
-@router.callback_query(F.data == "edit_name")
-async def callback_edit_name(event: Message | CallbackQuery):
-    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
-    await callback_menu(event)
-
-
-@router.callback_query(F.data == "edit_age")
-async def callback_edit_age(event: Message | CallbackQuery):
-    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
-    await callback_menu(event)
-
-
-@router.callback_query(F.data == "edit_sex")
-async def callback_edit_sex(event: Message | CallbackQuery):
-    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
-    await callback_menu(event)
-
-
-@router.callback_query(F.data == "edit_faculty")
-async def callback_edit_faculty(event: Message | CallbackQuery):
-    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
-    await callback_menu(event)
-
-
-@router.callback_query(F.data == "edit_degree")
-async def callback_edit_degree(event: Message | CallbackQuery):
-    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
-    await callback_menu(event)
-
-
-@router.callback_query(F.data == "edit_course")
-async def callback_edit_course(event: Message | CallbackQuery):
-    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
-    await callback_menu(event)
-
-
-@router.callback_query(F.data == "edit_photo")
-async def callback_edit_photo(event: Message | CallbackQuery):
-    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
-    await callback_menu(event)
-
-
-@router.callback_query(F.data == "edit_about")
-async def callback_edit_about(event: Message | CallbackQuery):
-    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
-    await callback_menu(event)
-
-
-@router.callback_query(F.data == "edit_friend_sex")
-async def callback_edit_friend_sex(event: Message | CallbackQuery):
-    await event.message.answer("Временно недоступно") if isinstance(event, CallbackQuery) else event.answer("Временно недоступно")
-    await callback_menu(event)

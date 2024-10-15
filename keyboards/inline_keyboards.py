@@ -17,13 +17,27 @@ main_menu = InlineKeyboardMarkup(row_width=2,
                                      ]
                                  ])
 
-main_settings = InlineKeyboardMarkup(row_width=3,
+# main_settings = InlineKeyboardMarkup(row_width=3,
+#                                      inline_keyboard=[
+#                                          [
+#                                              InlineKeyboardButton(text='Изменить профиль', callback_data='edit_profile'),
+#                                              InlineKeyboardButton(text='Перезаписать профиль',
+#                                                                   callback_data='rewrite_profile'),
+#                                              InlineKeyboardButton(text='Удалить профиль', callback_data='delete_profile')
+#                                          ],
+#                                          [
+#                                              InlineKeyboardButton(text='Обратная связь', callback_data='feedback')
+#                                          ],
+#                                          [
+#                                              InlineKeyboardButton(text="В меню", callback_data="menu")
+#                                          ]
+#                                      ])
+
+main_settings = InlineKeyboardMarkup(row_width=2,
                                      inline_keyboard=[
                                          [
-                                             InlineKeyboardButton(text='Изменить профиль', callback_data='edit_profile'),
                                              InlineKeyboardButton(text='Перезаписать профиль',
                                                                   callback_data='rewrite_profile'),
-                                             InlineKeyboardButton(text='Отключить профиль', callback_data='off_profile'),
                                              InlineKeyboardButton(text='Удалить профиль', callback_data='delete_profile')
                                          ],
                                          [
@@ -79,11 +93,17 @@ assessment_menu = InlineKeyboardMarkup(row_width=2,
 research = InlineKeyboardMarkup(row_width=2,
                                 inline_keyboard=[
                                     [
-                                        InlineKeyboardButton(text='Перезапустить поиск', callback_data="restart_search"),
-                                        InlineKeyboardButton(text='Обновить анкеты', callback_data='update_search')
+                                        InlineKeyboardButton(text='Перезапустить поиск', callback_data="restart_search")
+                                        # InlineKeyboardButton(text='Обновить анкеты', callback_data='update_search')
                                     ],
                                     [
                                         InlineKeyboardButton(text="В меню", callback_data="menu")
                                     ]
                                 ])
 
+back_to_main = InlineKeyboardMarkup(row_width=1,
+                                    inline_keyboard=[
+                                        [
+                                            InlineKeyboardButton(text="В меню", callback_data="menu")
+                                        ]
+                                    ])
