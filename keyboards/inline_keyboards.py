@@ -93,7 +93,7 @@ assessment_menu = InlineKeyboardMarkup(row_width=2,
 research = InlineKeyboardMarkup(row_width=2,
                                 inline_keyboard=[
                                     [
-                                        InlineKeyboardButton(text='Перезапустить поиск', callback_data="restart_search") 
+                                        InlineKeyboardButton(text='Перезапустить поиск', callback_data="restart_search")
                                         # InlineKeyboardButton(text='Обновить анкеты', callback_data='update_search')
                                     ],
                                     [
