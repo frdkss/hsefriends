@@ -4,13 +4,12 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
-from pyexpat.errors import messages
 from sqlalchemy import select
 
 from callbacks.usr_callbacks import callback_menu
 from database.db_cfg import accounts_db_session
-from keyboards.default_keyboards import user_sex, user_course_bac, no_about, user_friend_sex, no_photo
-
+from keyboards.default_keyboards import user_sex, user_course_bac, no_about, user_friend_sex, no_photo, user_isBaccalaureate
+from keyboards.inline_keyboards import back_to_main
 from database.models import AccountsTable
 from .forms.state_forms import RewriteProfile
 
@@ -38,10 +37,10 @@ async def state_user_rewrite(event: Message | CallbackQuery, state: FSMContext):
     await event.message.answer(f"Ваше текущее имя: {user_profile.name}. Введите новое имя:")
 
 @router.message(Command('cancel'))
-async def cancel_reg(message: Message, state: FSMContext):
+async def cancel_reg(event: Message | CallbackQuery, state: FSMContext):
     await state.clear()
 
-    await callback_menu(message)
+    await callback_menu(event)
 
 @router.message(RewriteProfile.name)
 async def state_edit_name(message: Message, state: FSMContext):
@@ -78,19 +77,19 @@ async def state_edit_gender(message: Message, state: FSMContext):
 @router.message(RewriteProfile.faculty)
 async def state_edit_faculty(message: Message, state: FSMContext):
     """Редактирование факультета."""
-    if message.text == 'Бакалавриат':
-        await state.update_data(faculty=True)
-    elif message.text == 'Магистратруа':
-        await state.update_data(faculty=False)
+    await state.update_data(faculty=message.text)
 
-    await message.answer('На каком ты уровне образования?')
+    await message.answer('На каком ты уровне образования?', reply_markup=user_isBaccalaureate)
     await state.set_state(RewriteProfile.isBaccalaureate)
 
 
 @router.message(RewriteProfile.isBaccalaureate)
 async def state_edit_degree(message: Message, state: FSMContext):
-    await state.update_data(is_bac=message.text)
-
+    
+    if message.text == 'Бакалавриат':
+        await state.update_data(is_bac=True)
+    elif message.text == 'Магистратруа':
+        await state.update_data(is_bac=False)
     await message.answer("На каком вы курсе?", reply_markup=user_course_bac)
     await state.set_state(RewriteProfile.course)
 
@@ -150,13 +149,15 @@ async def user_about_inf(message: Message, state: FSMContext):
 
 
 @router.message(RewriteProfile.friend_sex)
-async def user_friend_sex_inf(message: Message, state: FSMContext, event: Message | CallbackQuery):
+async def user_friend_sex_inf(message: Message, state: FSMContext):
     if message.text == "Мужчины":
         await state.update_data(friends_sex="males")
     elif message.text == "Девушки":
         await state.update_data(friends_sex="females")
     elif message.text == "Без разницы":
         await state.update_data(friends_sex="dont_care")
+
+    await message.answer("Секунду, записываем твои данные...", reply_markup=ReplyKeyboardRemove())
     # Получение обновленных данных и сохранение в базу данных
     data = await state.get_data()
     async with accounts_db_session() as session:
@@ -178,6 +179,6 @@ async def user_friend_sex_inf(message: Message, state: FSMContext, event: Messag
 
             await session.commit()
 
-    await message.answer("Профиль успешно обновлен!", reply_markup=ReplyKeyboardRemove())
+    await message.answer("Профиль успешно обновлен!", reply_markup=back_to_main)
     await state.clear()
-    await callback_menu(event)
+    

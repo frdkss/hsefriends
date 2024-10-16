@@ -5,141 +5,110 @@ from datetime import datetime
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove
-from pyexpat.errors import messages
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy.future import select
-from sqlalchemy import or_, and_, text
+from sqlalchemy import or_, and_, text, not_, exists
 
-from handlers.usr_commands import command_start
-from keyboards.inline_keyboards import main_menu, main_settings, assessment_menu, research, feedback_url, back_to_main, edit_profile
+from keyboards.inline_keyboards import main_menu, main_settings, assessment_menu, research, feedback_url, back_to_main, \
+    edit_profile, first_registration_keyboard, next_anketa
 from keyboards.default_keyboards import confirmation
 
-from database.db_cfg import accounts_db_session, save_like, liked_db_session
-from database.models import AccountsTable
+from database.db_cfg import accounts_db_session, save_like, liked_db_session, engine_like
+from database.models import AccountsTable, create_liked_table
 
 router = Router()
 
 
 async def search_accounts(user_is_male: bool, user_preference: str, user_age: int, user_chat_id: int):
-    # Исключаем текущего пользователя из поиска
+    # Создаем запрос для основной таблицы анкет
     query = select(AccountsTable).filter(AccountsTable.chat_id != user_chat_id)
 
-    # Логика для мужчины
+    # Фильтрация по полу и предпочтениям пользователя
     if user_is_male:
         if user_preference == 'males':
-            # Мужчина ищет мужчин
             query = query.filter(
-                AccountsTable.isMale == True,  # Только мужчины
+                AccountsTable.isMale == True,
                 or_(
-                    AccountsTable.friend_sex == 'males',  # Которые ищут мужчин
-                    AccountsTable.friend_sex == 'dont_care'  # Или им всё равно
-                ),
-                # Скрываем мужчин, которые ищут женщин
-                and_(
-                    AccountsTable.friend_sex != 'females'
+                    AccountsTable.friend_sex == 'males',
+                    AccountsTable.friend_sex == 'dont_care'
                 )
             )
         elif user_preference == 'females':
-            # Мужчина ищет женщин
             query = query.filter(
-                AccountsTable.isMale == False,  # Только женщины
+                AccountsTable.isMale == False,
                 or_(
-                    AccountsTable.friend_sex == 'males',  # Которые ищут мужчин
-                    AccountsTable.friend_sex == 'dont_care'  # Или им всё равно
-                ),
-                # Скрываем женщин, которые ищут женщин
-                and_(
-                    AccountsTable.friend_sex != 'females'
+                    AccountsTable.friend_sex == 'males',
+                    AccountsTable.friend_sex == 'dont_care'
                 )
             )
         elif user_preference == 'dont_care':
-            # Мужчина ищет и мужчин, и женщин
             query = query.filter(
                 or_(
                     and_(
-                        AccountsTable.isMale == True,  # Мужчины
+                        AccountsTable.isMale == True,
                         or_(
-                            AccountsTable.friend_sex == 'males',  # Ищут мужчин
-                            AccountsTable.friend_sex == 'dont_care'  # Им всё равно
+                            AccountsTable.friend_sex == 'males',
+                            AccountsTable.friend_sex == 'dont_care'
                         )
                     ),
                     and_(
-                        AccountsTable.isMale == False,  # Женщины
-                        or_(
-                            AccountsTable.friend_sex == 'males',  # Ищут мужчин
-                            AccountsTable.friend_sex == 'dont_care'  # Им всё равно
-                        )
-                    )
-                ),
-                # Скрываем мужчин, которые ищут женщин, и женщин, которые ищут женщин
-                or_(
-                    AccountsTable.isMale == True,
-                    and_(
                         AccountsTable.isMale == False,
-                        AccountsTable.friend_sex != 'females'
+                        or_(
+                            AccountsTable.friend_sex == 'males',
+                            AccountsTable.friend_sex == 'dont_care'
+                        )
                     )
                 )
             )
-
-    # Логика для женщины
     else:
+        # Аналогичная логика для пользователя-женщины
         if user_preference == 'males':
-            # Женщина ищет мужчин
             query = query.filter(
-                AccountsTable.isMale == True,  # Только мужчины
+                AccountsTable.isMale == True,
                 or_(
-                    AccountsTable.friend_sex == 'females',  # Ищут женщин
-                    AccountsTable.friend_sex == 'dont_care'  # Им всё равно
-                ),
-                # Скрываем мужчин, которые ищут мужчин
-                and_(
-                    AccountsTable.friend_sex != 'males'
+                    AccountsTable.friend_sex == 'females',
+                    AccountsTable.friend_sex == 'dont_care'
                 )
             )
         elif user_preference == 'females':
-            # Женщина ищет женщин
             query = query.filter(
-                AccountsTable.isMale == False,  # Только женщины
+                AccountsTable.isMale == False,
                 or_(
-                    AccountsTable.friend_sex == 'females',  # Ищут женщин
-                    AccountsTable.friend_sex == 'dont_care'  # Им всё равно
-                ),
-                # Скрываем женщин, которые ищут мужчин
-                and_(
-                    AccountsTable.friend_sex != 'males'
+                    AccountsTable.friend_sex == 'females',
+                    AccountsTable.friend_sex == 'dont_care'
                 )
             )
         elif user_preference == 'dont_care':
-            # Женщина ищет и мужчин, и женщин
             query = query.filter(
                 or_(
                     and_(
-                        AccountsTable.isMale == True,  # Мужчины
+                        AccountsTable.isMale == True,
                         or_(
-                            AccountsTable.friend_sex == 'females',  # Ищут женщин
-                            AccountsTable.friend_sex == 'dont_care'  # Им всё равно
+                            AccountsTable.friend_sex == 'females',
+                            AccountsTable.friend_sex == 'dont_care'
                         )
                     ),
                     and_(
-                        AccountsTable.isMale == False,  # Женщины
-                        or_(
-                            AccountsTable.friend_sex == 'females',  # Ищут женщин
-                            AccountsTable.friend_sex == 'dont_care'  # Им всё равно
-                        )
-                    )
-                ),
-                # Скрываем мужчин, которые ищут мужчин, и женщин, которые ищут мужчин
-                or_(
-                    AccountsTable.isMale == True,
-                    and_(
                         AccountsTable.isMale == False,
-                        AccountsTable.friend_sex != 'males'
+                        or_(
+                            AccountsTable.friend_sex == 'females',
+                            AccountsTable.friend_sex == 'dont_care'
+                        )
                     )
                 )
             )
 
-    # Выполняем запрос
+    # Дополнительная логика фильтрации по isLiked и isDisliked
+    async with liked_db_session() as session:
+        liked_table = f"liked_{user_chat_id}"
+        sql_query = text(f"SELECT chat_id FROM {liked_table} WHERE isLiked = True OR isDisliked = True")
+        result = await session.execute(sql_query)
+
+        excluded_chat_ids = [row[0] for row in result.fetchall()]
+        if excluded_chat_ids:
+            query = query.filter(~AccountsTable.chat_id.in_(excluded_chat_ids))
+
     result = await accounts_db_session.execute(query)
     return result.scalars().all()
 
@@ -285,7 +254,7 @@ async def send_mutual_like_notification(event: CallbackQuery, chat_id: int, tele
     """Отправляет уведомление о взаимном лайке."""
     await event.bot.send_message(
         chat_id,
-        f"У вас взаимный лайк! @{telegram_username}"
+        f"У вас взаимный лайк! @{telegram_username}", reply_markup=next_anketa
     )
 
 
@@ -418,6 +387,9 @@ async def callback_find_people(event: CallbackQuery):
             user = user.scalar_one_or_none()
 
             if user:
+                # Создаем таблицы для статистики и liked перед поиском
+                await create_liked_table(user.chat_id, engine_like)
+
                 results = await search_accounts(user.isMale, user.friend_sex, user.age, user.chat_id)
                 print(results)
                 print(f"Найдено {len(results)} анкет:")
@@ -430,23 +402,28 @@ async def callback_find_people(event: CallbackQuery):
                     await display_account(event, first_account)  # Отправляем анкету с фото или текстом
                 else:
                     await event.message.edit_text("Анкеты не найдены.")
-                await session.close()
-
+            await session.close()
 
 @router.callback_query(F.data == "like")
 async def callback_like(event: CallbackQuery):
     user_chat_id = event.message.chat.id
-    liked_account = await get_next_account(user_chat_id, update_last_uid=True)  # Обновляем last_uid при лайке
+    liked_account = await get_next_account(user_chat_id, update_last_uid=True)
 
     if liked_account:
-        # Сохраняем лайк в базу данных
         await save_like(user_chat_id, liked_account.chat_id)
 
-        # Отправляем запрос на взаимный лайк
+        # Устанавливаем isLiked = True в таблице liked_{user_chat_id}
+        async with liked_db_session() as session:
+            liked_table = f"liked_{user_chat_id}"
+            await session.execute(
+                text(f"UPDATE {liked_table} SET isLiked = True WHERE chat_id = :chat_id"),
+                {"chat_id": liked_account.chat_id}
+            )
+            await session.commit()
+
         await send_like_request(event, liked_account.chat_id, user_chat_id)
 
-        # После успешного отправления запроса на лайк, отображаем следующую анкету
-        next_account = await get_next_account(user_chat_id, update_last_uid=False)  # Не обновляем last_uid повторно
+        next_account = await get_next_account(user_chat_id, update_last_uid=False)
         if next_account:
             await display_account(event, next_account)
         else:
@@ -469,6 +446,15 @@ async def callback_dislike(event: CallbackQuery):
     next_account = await get_next_account(user_chat_id)
 
     if next_account:
+        # Устанавливаем isDisliked = True в таблице liked_{user_chat_id}
+        async with liked_db_session() as session:
+            liked_table = f"liked_{user_chat_id}"
+            await session.execute(
+                text(f"UPDATE {liked_table} SET isDisliked = True WHERE chat_id = :chat_id"),
+                {"chat_id": next_account.chat_id}
+            )
+            await session.commit()
+
         await display_account(event, next_account)
     else:
         await event.message.delete()
@@ -544,119 +530,4 @@ async def callback_send_feedback(call: CallbackQuery):
 async def callback_edit_profile(event: Message | CallbackQuery):
     await event.message.answer("Выберете что мы будем изменять:", reply_markup=edit_profile) if isinstance(event, CallbackQuery) else event.answer(
         "Выберете что мы будем изменять:", reply_markup=edit_profile)
-
-
-@router.callback_query(F.data == 'license_agr')
-async def callback_license_agr(call: CallbackQuery, message: Message):
-    await call.message.answer(
-'''
-Пользовательское Соглашение
-Настоящее Пользовательское Соглашение (Далее Соглашение) регулирует отношения между владельцем @hsefriends (далее HSEfriends или Администрация) с одной стороны и пользователем сервиса с другой.
-Сервис HSEfriends не является средством массовой информации.
-
-Используя сервис HSEfriends, Вы соглашаетесь с условиями данного соглашения.
-Если Вы не согласны с условиями данного соглашения, не используйте сервис HSEfriends!
-
-Предмет соглашения
-Администрация предоставляет пользователю право на размещение на сервисе следующей информации:
-
-Текстовой информации
-Видеоматериалов
-Фотоматериалов
-Права и обязанности сторон
-Пользователь имеет право:
-
-осуществлять поиск информации на сервисе
-получать информацию на сервисе
-создавать информацию для сервиса
-распространять информацию на сервисе
-копировать информацию на другие сервисы с указанием источника
-использовать информацию сервиса в личных некоммерческих целях
-Администрация имеет право:
-
-по своему усмотрению и необходимости создавать, изменять, отменять правила
-ограничивать доступ к любой информации на сервисе
-создавать, изменять, удалять информацию
-удалять учетные записи
-отказывать в регистрации без объяснения причин
-Пользователь обязуется:
-
-не распространять информацию, которая направлена на пропаганду войны, разжигание национальной, расовой или религиозной ненависти и вражды, а также иной информации, за распространение которой предусмотрена уголовная или административная ответственность
-не нарушать работоспособность сервиса
-не создавать несколько учётных записей на сервисе, если фактически они принадлежат одному и тому же лицу
-не регистрировать учетную запись от имени или вместо другого лица за исключением случаев, предусмотренных законодательством РФ
-не размещать материалы рекламного, эротического, порнографического или оскорбительного характера, а также иную информацию, размещение которой запрещено или противоречит нормам действующего законодательства РФ
-не использовать скрипты (программы) для автоматизированного сбора информации и/или взаимодействия с сервисом
-Администрация обязуется:
-
-поддерживать работоспособность сервиса за исключением случаев, когда это невозможно по независящим от Администрации причинам.
-защищать информацию, распространение которой ограничено или запрещено законами путем вынесения предупреждения либо удалением учетной записи пользователя, нарушившего правила
-предоставить всю доступную информацию о Пользователе уполномоченным на то органам государственной власти в случаях, установленных законом
-Ответственность сторон
-пользователь лично несет полную ответственность за распространяемую им информацию
-администрация не несет никакой ответственности за достоверность информации, скопированной из других источников
-администрация не несёт ответственность за несовпадение ожидаемых Пользователем и реально полученных услуг
-администрация не несет никакой ответственности за услуги, предоставляемые третьими лицами
-в случае возникновения форс-мажорной ситуации (боевые действия, чрезвычайное положение, стихийное бедствие и т. д.) Администрация не гарантирует сохранность информации, размещённой Пользователем, а также бесперебойную работу ресурса
-Условия действия Соглашения
-Данное Соглашение вступает в силу при любом использовании данного сервиса.
-Соглашение перестает действовать при появлении его новой версии.
-Администрация оставляет за собой право в одностороннем порядке изменять данное соглашение по своему усмотрению.
-Администрация не оповещает пользователей об изменении в Соглашении.
-
-Так как сервис работает в Telegram, использование данного бота также регулируется политикой конфиденциальности и условиями использования Telegram. Пользователи должны понимать, что их данные могут обрабатываться не только администрацией бота, но и Telegram
-
-'''
-    )
-    await command_start(message)
-
-@router.callback_query(F.data == 'policy_agr')
-async def callback_policy_agr(call: CallbackQuery, message: Message):
-    await call.message.answer(
-'''
-Политика Конфиденциальности
-Настоящая Политика Конфиденциальности регулирует порядок сбора, использования, хранения и защиты данных, получаемых от пользователей сервиса HSEfriends в Telegram (далее — Сервис). Используя Сервис, Вы соглашаетесь с условиями данной Политики Конфиденциальности. Если Вы не согласны с условиями, пожалуйста, прекратите использование Сервиса.
-
-Термины и определения
-Персональные данные — любая информация, относящаяся к пользователю Сервиса, позволяющая прямо или косвенно его идентифицировать.
-Обработка персональных данных — любые действия (операции) с персональными данными, включая сбор, запись, систематизацию, накопление, хранение, уточнение (обновление, изменение), извлечение, использование, передачу (распространение, предоставление, доступ), обезличивание, блокирование, удаление, уничтожение персональных данных.
-Администрация — владельцы и операторы Сервиса, имеющие право на управление и обработку данных пользователей.
-Сбор персональных данных
-Сервис может собирать следующую информацию о пользователях:
-
-Имя пользователя в Telegram и идентификатор (ID).
-Сообщения и информацию, отправляемую пользователем в чат с ботом.
-Информацию, предоставляемую пользователем при заполнении форм в рамках Сервиса (например, анкеты или отзывы).
-Сервис не собирает специальные категории персональных данных (такие как данные о состоянии здоровья, религиозных убеждениях и политических взглядах) без явного согласия пользователя.
-
-Цели сбора и обработки данных
-Персональные данные могут использоваться в следующих целях:
-
-Предоставление доступа к функциям и услугам Сервиса.
-Поддержка пользователей и обработка их запросов.
-Улучшение качества работы Сервиса и развитие новых функций.
-Анализ активности пользователей с целью улучшения взаимодействия с Сервисом.
-Выполнение обязательств, предусмотренных законодательством РФ, включая передачу данных уполномоченным органам.
-Хранение данных
-Персональные данные пользователей хранятся и обрабатываются в соответствии с действующим законодательством.
-
-Срок хранения данных зависит от целей их обработки, если иное не предусмотрено законодательством.
-
-Передача данных третьим лицам
-Используя Сервис HSEfriends, пользователь соглашается с тем, что его персональные данные могут быть переданы третьим лицам в следующих случаях:
-
-Передача необходима для выполнения обязательств перед пользователем, в том числе для обеспечения функционала Сервиса.
-Передача данных осуществляется для выполнения требований законодательства Российской Федерации, в том числе по запросам уполномоченных государственных органов в рамках установленной законодательством процедуры.
-Передача данных необходима для защиты прав и законных интересов Администрации Сервиса в случае возникновения споров или претензий.
-Передача осуществляется с согласия пользователя, выраженного в форме принятия настоящей Политики Конфиденциальности.
-Обновление Политики Конфиденциальности
-Администрация оставляет за собой право изменять условия настоящей Политики Конфиденциальности по своему усмотрению.
-
-Пользователи несут ответственность за регулярное ознакомление с актуальной версией Политики. Продолжение использования Сервиса после внесения изменений считается согласием с новой версией Политики.
-
-Контактная информация
-По всем вопросам, связанным с обработкой персональных данных, Вы можете связаться с Администрацией по следующему адресу электронной почты: rodionmalikovf@gmail.com, или в Telegram @rcptg.
-'''
-)
-    await command_start(message)
 

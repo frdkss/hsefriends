@@ -4,8 +4,8 @@ first_registration_keyboard = InlineKeyboardMarkup(row_width=1,
                                                    inline_keyboard=[
                                                        [InlineKeyboardButton(text='Начать регистрацию', callback_data='first_reg')],
                                                        [
-                                                           InlineKeyboardButton(text='', callback_data='license_agr'),
-                                                           InlineKeyboardButton(text='', callback_data='policy_agr')
+                                                           InlineKeyboardButton(text='Пользовательское Соглашение', url='https://telegra.ph/Polzovatelskoe-Soglashenie-10-15-13'),
+                                                           InlineKeyboardButton(text='Политика Конфиденциальности', url='https://telegra.ph/Politika-Konfidencialnosti-10-15-12')
                                                        ]
                                                    ])
 
@@ -14,6 +14,8 @@ main_menu = InlineKeyboardMarkup(row_width=2,
                                      [
                                          InlineKeyboardButton(text='Искать друзей!', callback_data='start_search'),
                                          InlineKeyboardButton(text='Мой профиль', callback_data='profile'),
+                                     ],
+                                     [
                                          InlineKeyboardButton(text='Настройки', callback_data='settings')
                                      ]#,
                                      # [
@@ -109,5 +111,12 @@ back_to_main = InlineKeyboardMarkup(row_width=1,
                                     inline_keyboard=[
                                         [
                                             InlineKeyboardButton(text="В меню", callback_data="menu")
+                                        ]
+                                    ])
+                                    
+next_anketa = InlineKeyboardMarkup(row_width=1,
+                                    inline_keyboard=[
+                                        [
+                                            InlineKeyboardButton(text="Продолжить поиск", callback_data="start_search")
                                         ]
                                     ])
