@@ -193,5 +193,5 @@ async def user_friend_sex_inf(message: Message, state: FSMContext):
             accounts_db_session.add(accounts_table)
             await accounts_db_session.commit()
 
-    await message.answer(f"Регистраниця завершена!", reply_markup=ReplyKeyboardRemove())
+    await message.answer(f"Регистрация завершена!", reply_markup=ReplyKeyboardRemove())
     await usr_callbacks.callback_menu(message)

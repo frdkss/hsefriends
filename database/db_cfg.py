@@ -2,7 +2,8 @@ import asyncio
 
 from sqlalchemy.future import select
 from sqlalchemy import Table, MetaData
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_scoped_session, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_scoped_session, \
+    async_sessionmaker
 from .models import Base, AccountsTable, create_stat_table, create_liked_table  # импорт моделей
 
 # Конфигурация для подключения к базе данных
@@ -127,9 +128,6 @@ async def check_mutual_like(liked_chat_id: int, user_chat_id: int) -> bool:
 async def init_db():
     async with engine_accounts.begin() as conn:
         await conn.run_sync(Base.metadata.create_all, tables=[AccountsTable.__table__])
-
-    # async with engine_statistic.begin() as conn:
-    #     await conn.run_sync(Base.metadata.create_all, tables=[StatTable.__table__])
 
 
 def create_db():

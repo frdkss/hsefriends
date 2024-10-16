@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, inspect
 from sqlalchemy import Table, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -48,10 +48,13 @@ async def create_stat_table(chat_id, engine: AsyncEngine):
         # autofill from user action
         Column('likes', Integer, default=0),
         Column('dislikes', Integer, default=0),
+        Column('user_mutual_like', Integer, default=0),
+        Column('user_reject_like', Integer, default=0),
         Column('profile_likes', Integer, default=0),
         Column('profile_dislikes', Integer, default=0),
-        Column('user_sessions', Integer),
-        Column('time_session', Integer),
+        Column('profile_mutual_like', Integer, default=0),
+        Column('profile_reject_like', Integer, default=0),
+        Column('time_reaction', Integer),
         extend_existing=True
     )
 
@@ -72,12 +75,20 @@ async def create_liked_table(chat_id, engine: AsyncEngine):
         Column('id', Integer, primary_key=True),
         Column('chat_id', Integer, nullable=False),
         Column('liked_account', Integer, nullable=False),
+        Column('isLiked', Boolean),
+        Column('isDisliked', Boolean),
         extend_existing=True
     )
 
-    # Используем асинхронный контекст для создания таблицы
     async with engine.begin() as conn:
-        await conn.run_sync(metadata.create_all)
+        # Используем run_sync для инспекции таблицы
+        def has_table(connection):
+            inspector = inspect(connection)
+            return inspector.has_table(table_name)
+
+        # Проверяем существование таблицы перед созданием
+        if not await conn.run_sync(has_table):
+            await conn.run_sync(metadata.create_all)
 
     return liked_table
 
