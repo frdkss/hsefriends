@@ -3,10 +3,8 @@ import sqlite3
 import os
 from matplotlib.ticker import MultipleLocator
 
-# Подключение к базе данных
-db_path = r'D:\python_proj\hsefriends\database\accounts.db'
 
-def generate_users_statistic():
+def generate_users_statistic(db_path, stat_path):
     # Открытие соединения с базой данных
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -15,6 +13,10 @@ def generate_users_statistic():
     cursor.execute("SELECT COUNT(*) FROM Accounts")
     total_users = cursor.fetchone()[0]
     conn.close()
+
+    # Запись количества пользователей в текстовый файл
+    with open(f'{stat_path}users_count.txt', 'w') as f:
+        f.write(f'Количество пользователей: {total_users}\n')
 
     # Построение графика
     plt.figure(figsize=(19.2, 10.8), dpi=100)
@@ -28,9 +30,7 @@ def generate_users_statistic():
     plt.gca().yaxis.set_minor_locator(MultipleLocator(1))  # Маленькие деления каждое равно 1
 
     # Сохранение графика
-    os.makedirs('statistic_png/user_stat', exist_ok=True)
-    plt.savefig('statistic_png/user_stat/users_statistic.png')
+    os.makedirs(stat_path, exist_ok=True)
+    plt.savefig(f'{stat_path}users_statistic.png')
     plt.close()
 
-# Пример вызова функции
-generate_users_statistic()

@@ -33,7 +33,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    print("Bot started!" + colorama.Fore.RED)
+    print("HSE Friends started!" + colorama.Fore.RED)
     inits_logger.info('bot successfully started')
     create_db()
     asyncio.run(main())
