@@ -1,0 +1,10 @@
+from age_statistic import generate_age_statistic
+from reg_statistic import generate_reg_statistic
+from sex_statistic import generate_sex_statistic
+from users_statistic import generate_users_statistic
+
+
+generate_age_statistic()
+generate_reg_statistic(days=7)
+generate_sex_statistic()
+generate_users_statistic()
