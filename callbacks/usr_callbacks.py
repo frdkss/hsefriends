@@ -120,31 +120,29 @@ async def get_next_account(chat_id, update_last_uid=True):
                 select(AccountsTable).filter_by(chat_id=chat_id)
             )
             user = user.scalar_one_or_none()
-
             if user:
-                # Получаем список анкет с учётом last_uid
                 results = await search_accounts(user.isMale, user.friend_sex, user.age, user.chat_id)
-
-                # Фильтруем анкеты, которые еще не были просмотрены
                 next_accounts = [acc for acc in results if acc.uid > user.last_uid]
-
                 if next_accounts:
                     next_account = next_accounts[0]
-
-                    # Обновляем last_uid только если нужно (например, при успешном показе новой анкеты)
                     if update_last_uid:
                         user.last_uid = next_account.uid
                         await session.commit()
                     return next_account
                 else:
-                    # Если все анкеты просмотрены, сбрасываем last_uid для повторного поиска
                     if update_last_uid:
-                        user.last_uid = 0  # Сбрасываем last_uid, чтобы начать просмотр заново
+                        user.last_uid = 0
                         await session.commit()
+                    results = await search_accounts(user.isMale, user.friend_sex, user.age, user.chat_id)
+                    if results:
+                        next_account = results[0]
+                        if update_last_uid:
+                            user.last_uid = next_account.uid
+                            await session.commit()
+                        return next_account
                     return None
             await session.close()
     return None
-
 
 async def display_account(event: CallbackQuery, account):
     gender = "Парень" if account.isMale else "Девушка"
@@ -530,4 +528,3 @@ async def callback_send_feedback(call: CallbackQuery):
 async def callback_edit_profile(event: Message | CallbackQuery):
     await event.message.answer("Выберете что мы будем изменять:", reply_markup=edit_profile) if isinstance(event, CallbackQuery) else event.answer(
         "Выберете что мы будем изменять:", reply_markup=edit_profile)
-
